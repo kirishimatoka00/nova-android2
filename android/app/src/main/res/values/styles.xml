@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
+        <!-- App 基本色系 -->
+        <item name="colorPrimary">#020617</item>
+        <item name="colorPrimaryDark">#020617</item>
+        <item name="colorAccent">#6366f1</item>
+
+        <!-- ★ 讓狀態列與導覽列跟 App 同色（深色） -->
+        <item name="android:statusBarColor">#020617</item>
+        <item name="android:navigationBarColor">#020617</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <!-- 啟動畫面主題（隱藏 ActionBar） -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@drawable/splash</item>
+    </style>
+
+</resources>

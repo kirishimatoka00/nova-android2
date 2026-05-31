@@ -1,0 +1,13 @@
+{
+  "appId": "com.你的名字.nova120",
+  "appName": "NOVA 120 SSP",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

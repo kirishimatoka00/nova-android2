@@ -1,0 +1,15 @@
+{
+  "name": "AINOVA 2.0",
+  "short_name": "AINOVA 2.0",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "2048x2048",
+      "type": "image/png"
+    }
+  ]
+}
