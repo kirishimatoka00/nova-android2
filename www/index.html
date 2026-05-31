@@ -2438,39 +2438,43 @@ html += '</tr>';
                 html += '</tbody></table></div>';
 return html;
             });        
-        // ★ NOVA CANVAS：攔截程式碼區塊，轉換為 Canvas 卡片
-        let canvasCardsHtml = '';
-        safe = safe.replace(/```(html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)([\s\S]*?)```/gi, function(match, lang, code) {
-            const cleanCode = code.replace(/^\n/, '').replace(/\n$/, '');
-            const canvasId = 'canvas_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-            const encodedCode = encodeURIComponent(cleanCode);
-            const langLabel = lang.toUpperCase();
-            const lineCount = cleanCode.split('\n').length;
-            canvasCardsHtml += `<div class="nova-canvas-card" data-code="${encodedCode}" data-lang="${lang}" data-canvas-id="${canvasId}" style="margin:12px 0;padding:14px;background:linear-gradient(135deg,#0f172a 0%,#131c30 100%);border:1px solid #1e3a5f;border-radius:16px;cursor:pointer;active:opacity-80;" onclick="novaCanvas.openFromCard(this)" ontouchstart="">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#1d4ed8,#0ea5e9);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class="ph-bold ph-code" style="color:#fff;font-size:20px;"></i>
-                    </div>
-                    <div style="flex:1;overflow:hidden;">
-                        <p style="font-size:13px;font-weight:700;color:#e2e8f0;">已在 Canvas 工作區開啟</p>
-                        <p style="font-size:11px;color:#64748b;margin-top:2px;">${langLabel} · ${lineCount} 行程式碼</p>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#1e3a5f;border-radius:8px;color:#38bdf8;font-size:11px;font-weight:700;flex-shrink:0;">
-                        <i class="ph-bold ph-arrow-square-out" style="font-size:13px;"></i>
-                        開啟
-                    </div>
-                </div>
-            </div>`;
-            return ''; // 移除原始 code block
-        });
+        // ★ NOVA CANVAS：攔截程式碼區塊，轉換為可執行的 Canvas 卡片
+        const codeBlockRegex = /```(html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)\n?([\s\S]*?)```/gi;
+        const extractedCodes = [];
+        let _cm;
+        const _tempForCanvas = tempText;
+        const _tmpRegex = new RegExp('```(html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)\\n?([\\s\\S]*?)```', 'gi');
+        while ((_cm = _tmpRegex.exec(_tempForCanvas)) !== null) {
+            const _lang = _cm[1], _code = _cm[2].replace(/^\n|\n$/g,'');
+            let _enc; try { _enc = btoa(unescape(encodeURIComponent(_code))); } catch(e) { _enc = ''; }
+            extractedCodes.push({ lang:_lang, code:_code, enc:_enc, lines:_code.split('\n').length, label:_lang.toUpperCase() });
+        }
 
-        // 未帶語言標記的 code block 保留原樣（inline code）
+        if (extractedCodes.length > 0) {
+            let _ci = 0;
+            safe = safe.replace(/```(?:html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)\n?[\s\S]*?```/gi, function() {
+                const ec = extractedCodes[_ci] || extractedCodes[0]; _ci++;
+                if (!ec) return '';
+                window._novaCanvasLastCode = ec.code;
+                window._novaCanvasLastLang = ec.lang;
+                return '<div onclick="novaCanvas.openEncoded(this.dataset.enc,this.dataset.lang)" data-enc="' + ec.enc + '" data-lang="' + ec.lang + '" style="margin:10px 0;padding:14px 16px;background:linear-gradient(135deg,#0c1829,#0f1e35);border:1px solid #1e4080;border-radius:16px;cursor:pointer;display:flex;align-items:center;gap:12px;">'
+                    + '<div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1d4ed8,#06b6d4);display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+                    + '<i class="ph-bold ph-code" style="color:#fff;font-size:22px;"></i></div>'
+                    + '<div style="flex:1;overflow:hidden;">'
+                    + '<p style="font-size:13px;font-weight:700;color:#e2e8f0;margin:0;">點擊在 Canvas 執行</p>'
+                    + '<p style="font-size:11px;color:#38bdf8;margin:3px 0 0;">' + ec.label + ' &nbsp;·&nbsp; ' + ec.lines + ' 行</p>'
+                    + '</div>'
+                    + '<div style="padding:7px 12px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);border-radius:10px;color:#38bdf8;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;">'
+                    + '<i class="ph-bold ph-play" style="font-size:13px;"></i> 執行</div></div>';
+            });
+        }
+
+        // 未帶語言的 code block → inline 樣式
         safe = safe.replace(/```([\s\S]*?)```/g, function(match, code) {
             return '<code style="background:#1e293b;color:#94a3b8;padding:2px 6px;border-radius:4px;font-size:0.85em;font-family:monospace;">' + code.trim() + '</code>';
         });
 
         let finalHtml = safe.replace(/\n/g, '<br>');
-        if (canvasCardsHtml) finalHtml = canvasCardsHtml + finalHtml;
         if (pptButtonHtml) finalHtml += pptButtonHtml;
         if (excelButtonHtml) finalHtml += excelButtonHtml;
         if (dataUriButtonsHtml) finalHtml += dataUriButtonsHtml;
@@ -4648,86 +4652,6 @@ msg.files : (msg.file ? [msg.file] : []);
             const n = appState.notes.find(x => String(x.id) === String(id)); if(!n) return;
             const content = n.isHtml ? n.content : n.content.replace(/\n/g, '<br>');
             const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${n.title}</title></head><body><h1>${n.title}</h1><p>${n.date}</p><hr><div>${content}</div>
-    <!-- ═══════════════════════════════════════════════════════
-         NOVA CANVAS — 全螢幕工作區覆層
-         z-[99980] 低於 novaPrompt(99999) 和 confirm(99990)
-    ════════════════════════════════════════════════════════ -->
-    <div id="nova-canvas-overlay"
-         style="display:none;position:fixed;inset:0;z-index:99980;background:#0a0f1e;flex-direction:column;touch-action:pan-y;"
-         class="flex">
-
-        <!-- Canvas Header -->
-        <div id="nova-canvas-header"
-             style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f172a;border-bottom:1px solid #1e293b;flex-shrink:0;min-height:52px;">
-            <!-- 返回聊天 -->
-            <button onclick="novaCanvas.hide()"
-                    style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#1e293b;color:#94a3b8;flex-shrink:0;border:none;cursor:pointer;"
-                    ontouchstart="" class="active:scale-90 transition-transform">
-                <i class="ph-bold ph-arrow-left" style="font-size:18px;"></i>
-            </button>
-            <!-- 標題 -->
-            <div style="flex:1;overflow:hidden;">
-                <p id="nova-canvas-title" style="font-size:13px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Canvas 工作區</p>
-                <p id="nova-canvas-lang" style="font-size:10px;color:#64748b;margin-top:1px;">HTML</p>
-            </div>
-            <!-- 工具列 -->
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                <!-- 重新整理 -->
-                <button onclick="novaCanvas.refresh()"
-                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
-                        ontouchstart="" class="active:scale-90 transition-transform" title="重新整理">
-                    <i class="ph-bold ph-arrow-clockwise" style="font-size:16px;"></i>
-                </button>
-                <!-- 切換：預覽 / 原始碼 -->
-                <button id="nova-canvas-mode-btn" onclick="novaCanvas.toggleMode()"
-                        style="display:flex;align-items:center;gap:4px;padding:0 10px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;font-size:11px;font-weight:700;"
-                        ontouchstart="" class="active:scale-90 transition-transform">
-                    <i id="nova-canvas-mode-icon" class="ph-bold ph-eye" style="font-size:15px;"></i>
-                    <span id="nova-canvas-mode-label">預覽</span>
-                </button>
-                <!-- 複製程式碼 -->
-                <button onclick="novaCanvas.copyCode()"
-                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
-                        ontouchstart="" class="active:scale-90 transition-transform" title="複製程式碼">
-                    <i class="ph-bold ph-copy" style="font-size:16px;"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Canvas 主體 -->
-        <div style="flex:1;overflow:hidden;position:relative;">
-            <!-- iframe 預覽（安全沙盒） -->
-            <iframe id="nova-canvas-iframe"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-popups"
-                    style="width:100%;height:100%;border:none;background:#fff;display:block;"
-                    title="Canvas 預覽"></iframe>
-
-            <!-- 原始碼檢視 -->
-            <textarea id="nova-canvas-source"
-                      style="display:none;width:100%;height:100%;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:12px;line-height:1.6;padding:16px;border:none;outline:none;resize:none;white-space:pre;overflow-wrap:normal;overflow-x:auto;"
-                      readonly></textarea>
-
-            <!-- 載入中遮罩 -->
-            <div id="nova-canvas-loading"
-                 style="display:none;position:absolute;inset:0;background:#0a0f1e;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
-                <div style="width:36px;height:36px;border:3px solid #1e293b;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-                <p style="color:#64748b;font-size:13px;">渲染中...</p>
-            </div>
-        </div>
-
-        <!-- Canvas 底部狀態列 -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#0f172a;border-top:1px solid #1e293b;flex-shrink:0;min-height:40px;">
-            <p id="nova-canvas-status" style="font-size:10px;color:#475569;">就緒</p>
-            <button onclick="novaCanvas.hide()"
-                    style="font-size:11px;font-weight:700;color:#3b82f6;background:none;border:none;cursor:pointer;padding:4px 8px;">
-                ← 返回對話
-            </button>
-        </div>
-    </div>
-
-    <!-- Canvas 聊天中的浮動卡片（點擊可打開工作區）-->
-    <!-- 由 JS 動態插入到 chat-container -->
-
 </body></html>`;
             const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
             const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${n.title}.doc`; a.click(); URL.revokeObjectURL(url);
@@ -11101,7 +11025,288 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
             }
         };
 
-    </script>
+    
+
+// ╔══════════════════════════════════════════════════════════╗
+        // ║          NOVA CANVAS — 核心狀態管理與控制邏輯            ║
+        // ╚══════════════════════════════════════════════════════════╝
+        window.novaCanvas = (function() {
+            let _code = '';
+            let _lang = 'html';
+            let _mode = 'preview'; // 'preview' | 'source'
+            let _renderTimer = null;
+            const DEBOUNCE_MS = 400; // 防抖：串流時不頻繁重繪
+
+            const overlay  = () => document.getElementById('nova-canvas-overlay');
+            const iframe   = () => document.getElementById('nova-canvas-iframe');
+            const source   = () => document.getElementById('nova-canvas-source');
+            const loading  = () => document.getElementById('nova-canvas-loading');
+            const status   = () => document.getElementById('nova-canvas-status');
+            const title    = () => document.getElementById('nova-canvas-title');
+            const langEl   = () => document.getElementById('nova-canvas-lang');
+            const modeBtn  = () => document.getElementById('nova-canvas-mode-btn');
+            const modeIcon = () => document.getElementById('nova-canvas-mode-icon');
+            const modeLbl  = () => document.getElementById('nova-canvas-mode-label');
+
+            // ── 渲染到 iframe（防抖）──────────────────────────────
+            function scheduleRender(immediate) {
+                if (_renderTimer) clearTimeout(_renderTimer);
+                if (immediate) { _doRender(); return; }
+                _renderTimer = setTimeout(_doRender, DEBOUNCE_MS);
+            }
+
+            function _doRender() {
+                const el = loading();
+                if (el) { el.style.display = 'flex'; }
+                const fr = iframe();
+                if (!fr) return;
+
+                const lang = _lang.toLowerCase();
+                let doc;
+
+                if (lang === 'html') {
+                    doc = _code;
+
+                } else if (lang === 'css') {
+                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _code + '</style></head>'
+                        + '<body style="background:#1e293b;color:#94a3b8;font-family:sans-serif;padding:20px;">'
+                        + '<p>CSS 已套用（無 HTML 結構）</p></body></html>';
+
+                } else if (['javascript','js','jsx','tsx'].indexOf(lang) !== -1) {
+                    // JS：攔截 console 輸出顯示在畫面
+                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                        + '<style>*{box-sizing:border-box}body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
+                        + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;min-height:100vh}'
+                        + '.log{color:#e6edf3}.err{color:#f87171}.warn{color:#fbbf24}.info{color:#38bdf8}'
+                        + '</style></head><body><div id="output"></div>'
+                        + '<script>(function(){'
+                        + 'var out=document.getElementById("output");'
+                        + 'function pr(cls,args){var d=document.createElement("div");d.className=cls;'
+                        + 'd.textContent=Array.from(args).map(function(a){try{return typeof a==="object"?JSON.stringify(a,null,2):String(a);}catch(e){return String(a);}}).join(" ");'
+                        + 'out.appendChild(d);}'
+                        + 'var c=window.console;'
+                        + 'window.console={'
+                        + 'log:function(){pr("log",arguments);if(c&&c.log)c.log.apply(c,arguments);},'
+                        + 'error:function(){pr("err",arguments);if(c&&c.error)c.error.apply(c,arguments);},'
+                        + 'warn:function(){pr("warn",arguments);if(c&&c.warn)c.warn.apply(c,arguments);},'
+                        + 'info:function(){pr("info",arguments);if(c&&c.info)c.info.apply(c,arguments);}};'
+                        + 'window.onerror=function(msg,s,line){pr("err",["❌ 錯誤 line "+line+": "+msg]);return true;};'
+                        + '})();<\/script>'
+                        + '<script>\n' + _code.replace(/<\/script>/gi,'<\\/script>') + '\n<\/script>'
+                        + '</body></html>';
+
+                } else if (['python','py'].indexOf(lang) !== -1) {
+                    // Python：Pyodide WebAssembly 真正執行
+                    var safeCode = _code
+                        .replace(/\\/g,'\\\\')
+                        .replace(/`/g,'\\`');
+                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                        + '<style>*{box-sizing:border-box}body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
+                        + '#status{padding:10px 16px;background:#0f172a;border-bottom:1px solid #1e293b;color:#38bdf8;display:flex;align-items:center;gap:8px;font-size:12px}'
+                        + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;min-height:calc(100vh - 44px)}'
+                        + '.err{color:#f87171}.ok{color:#4ade80}</style></head><body>'
+                        + '<div id="status"><span id="sp">⏳</span><span id="st">載入 Python (Pyodide)...</span></div>'
+                        + '<div id="output"></div>'
+                        + '<script>'
+                        + 'var pyCode=`' + safeCode + '`;'
+                        + 'var out=document.getElementById("output");'
+                        + 'var st=document.getElementById("st");'
+                        + 'var sp=document.getElementById("sp");'
+                        + 'function ap(t,cls){var d=document.createElement("div");if(cls)d.className=cls;d.textContent=t;out.appendChild(d);}'
+                        + 'var s=document.createElement("script");'
+                        + 's.src="https://cdn.jsdelivr.net/pyodide/v0.27.5/full/pyodide.js";'
+                        + 's.onload=function(){'
+                        + '  st.textContent="初始化 Python...";'
+                        + '  loadPyodide({indexURL:"https://cdn.jsdelivr.net/pyodide/v0.27.5/full/"}).then(function(py){'
+                        + '    sp.textContent="✅";st.textContent="執行中...";'
+                        + '    py.runPython("import sys,io\\n_o=io.StringIO()\\n_e=io.StringIO()\\nsys.stdout=_o\\nsys.stderr=_e");'
+                        + '    try{'
+                        + '      py.runPython(pyCode);'
+                        + '      var o=py.runPython("_o.getvalue()");'
+                        + '      var e=py.runPython("_e.getvalue()");'
+                        + '      st.textContent="執行完成";'
+                        + '      if(o&&o.trim())ap(o);'
+                        + '      if(e&&e.trim())ap(e,"err");'
+                        + '      if(!o&&!e)ap("（執行完畢，無輸出）");'
+                        + '    }catch(ex){sp.textContent="❌";st.textContent="錯誤";ap(String(ex),"err");}'
+                        + '  }).catch(function(ex){sp.textContent="❌";st.textContent="載入失敗";ap(String(ex),"err");});'
+                        + '};'
+                        + 's.onerror=function(){sp.textContent="❌";st.textContent="無法載入 Pyodide（請確認網路連線）";};'
+                        + 'document.head.appendChild(s);'
+                        + '<\/script></body></html>';
+
+                } else {
+                    // 其他語言：顯示原始碼 + 說明
+                    var esc = _code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                        + '<style>body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px;line-height:1.7}'
+                        + '.banner{padding:12px 16px;background:#1e293b;border-bottom:1px solid #334155;color:#94a3b8;font-size:12px}'
+                        + 'pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-all}</style></head><body>'
+                        + '<div class="banner">⚠️ ' + _lang.toUpperCase() + ' 需要後端環境，Canvas 顯示原始碼供參考</div>'
+                        + '<pre>' + esc + '</pre></body></html>';
+                }
+
+                fr.srcdoc = doc;
+                fr.onload = function() {
+                    const el2 = loading();
+                    if (el2) el2.style.display = 'none';
+                    if (status()) status().textContent = _lang.toUpperCase() + ' · 渲染完成 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+                };
+            }
+
+            // ── 公開 API ─────────────────────────────────────────
+            return {
+                // 從對話卡片開啟
+                openFromCard: function(cardEl) {
+                    const encoded = cardEl.getAttribute('data-code');
+                    const lang = cardEl.getAttribute('data-lang') || 'html';
+                    const code = decodeURIComponent(encoded);
+                    this.open(code, lang);
+                },
+
+                // 從 + 選單開啟（顯示空白工作區）
+                openFromPlus: function() {
+                    const lastCode = window._novaCanvasLastCode || '';
+                    const lastLang = window._novaCanvasLastLang || 'html';
+                    if (lastCode) {
+                        this.open(lastCode, lastLang);
+                    } else {
+                        this.open([
+                            '<!DOCTYPE html><html><head><meta charset="utf-8">',
+                            '<title>Canvas</title></head>',
+                            '<body style="margin:0;background:#0f172a;display:flex;align-items:center;',
+                            'justify-content:center;height:100vh;font-family:sans-serif;color:#64748b;',
+                            'flex-direction:column;gap:12px;">',
+                            '<i style="font-size:48px;">🎨</i>',
+                            '<p style="font-size:14px;text-align:center;padding:0 24px;">',
+                            '在對話中請 AI 生成程式碼<br>將自動在此 Canvas 顯示</p>',
+                            '</body></html>'
+                        ].join(''), 'html');
+                    }
+                },
+
+                open: function(code, lang) {
+                    _code = code;
+                    _lang = lang || 'html';
+                    window._novaCanvasLastCode = code;
+                    window._novaCanvasLastLang = _lang;
+
+                    // 更新標題與語言標籤
+                    if (title()) title().textContent = 'Canvas 工作區';
+                    if (langEl()) langEl().textContent = _lang.toUpperCase();
+                    if (source()) source().value = code;
+
+                    // 重設為預覽模式
+                    _mode = 'preview';
+                    this._syncModeUI();
+
+                    // 顯示 overlay
+                    const ov = overlay();
+                    if (ov) { ov.style.display = 'flex'; }
+
+                    // 渲染（立即）
+                    scheduleRender(true);
+                },
+
+                hide: function() {
+                    const ov = overlay();
+                    if (ov) ov.style.display = 'none';
+                },
+
+                refresh: function() {
+                    scheduleRender(true);
+                    if (status()) status().textContent = '重新渲染中...';
+                },
+
+                toggleMode: function() {
+                    _mode = _mode === 'preview' ? 'source' : 'preview';
+                    this._syncModeUI();
+                },
+
+                _syncModeUI: function() {
+                    const fr = iframe();
+                    const src = source();
+                    const icon = modeIcon();
+                    const lbl = modeLbl();
+                    if (_mode === 'preview') {
+                        if (fr) fr.style.display = 'block';
+                        if (src) src.style.display = 'none';
+                        if (icon) icon.className = 'ph-bold ph-code';
+                        if (lbl) lbl.textContent = '程式碼';
+                    } else {
+                        if (fr) fr.style.display = 'none';
+                        if (src) { src.style.display = 'block'; src.value = _code; }
+                        if (icon) icon.className = 'ph-bold ph-eye';
+                        if (lbl) lbl.textContent = '預覽';
+                    }
+                },
+
+                copyCode: function() {
+                    if (!_code) return;
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(_code).then(() => {
+                            if (status()) status().textContent = '✅ 程式碼已複製';
+                            setTimeout(() => { if (status()) status().textContent = '就緒'; }, 2000);
+                        });
+                    }
+                },
+
+                // ★ 從 base64 encoded 卡片開啟（formatMessage 產生的卡片）
+                openEncoded: function(enc, lang) {
+                    let code;
+                    try { code = decodeURIComponent(escape(atob(enc))); } catch(e) { code = enc; }
+                    this.open(code, lang);
+                },
+
+                // ★ 串流更新（AI 回覆中途呼叫，有防抖）
+                streamUpdate: function(code, lang) {
+                    _code = code;
+                    if (lang) _lang = lang;
+                    window._novaCanvasLastCode = code;
+                    window._novaCanvasLastLang = _lang;
+                    if (source()) source().value = code;
+                    if (overlay() && overlay().style.display !== 'none') {
+                        scheduleRender(false); // 防抖渲染
+                    }
+                }
+            };
+        })();
+
+        // ── 監聽 AI 串流，自動偵測程式碼並更新 Canvas ──────────
+        // 在 handleSendMessage 的 streaming 回呼中插入 canvas 更新
+        (function() {
+            // 攔截 addMessage：當 AI 訊息含有程式碼區塊時，更新 canvas 暫存
+            const _origAddMessage = window.addMessage;
+            window.addMessage = function(text, sender, ...rest) {
+                if (sender === 'ai' && text) {
+                    const codeMatch = text.match(/```(html|css|javascript|js|jsx|tsx|vue|python|py|typescript|ts|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)([\s\S]*?)```/i);
+                    if (codeMatch) {
+                        const lang = codeMatch[1];
+                        const code = codeMatch[2].replace(/^\n/, '').replace(/\n$/, '');
+                        window._novaCanvasLastCode = code;
+                        window._novaCanvasLastLang = lang;
+                        // 若 Canvas 已開啟，自動更新
+                        const ov = document.getElementById('nova-canvas-overlay');
+                        if (ov && ov.style.display !== 'none') {
+                            novaCanvas.streamUpdate(code, lang);
+                        }
+                        // 閃爍 Canvas 按鈕提示
+                        const plusBtn = document.querySelector('[onclick*="openFromPlus"]');
+                        if (plusBtn) {
+                            plusBtn.style.borderColor = '#38bdf8';
+                            plusBtn.style.boxShadow = '0 0 12px rgba(56,189,248,0.4)';
+                            setTimeout(() => {
+                                plusBtn.style.borderColor = '';
+                                plusBtn.style.boxShadow = '';
+                            }, 3000);
+                        }
+                    }
+                }
+                return _origAddMessage ? _origAddMessage.call(this, text, sender, ...rest) : null;
+            };
+        })();
+
+        </script>
     <!-- ✅ telegram.js 移至此處：確保 appState 已初始化後才執行 -->
     <!-- （const appState 已在全域 lexical scope，telegram.js 可直接存取，無需 var bridge）-->
     <script src="./telegram.js"></script>
@@ -11220,205 +11425,88 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
     })();
     
 
-        // ╔══════════════════════════════════════════════════════════╗
-        // ║          NOVA CANVAS — 核心狀態管理與控制邏輯            ║
-        // ╚══════════════════════════════════════════════════════════╝
-        window.novaCanvas = (function() {
-            let _code = '';
-            let _lang = 'html';
-            let _mode = 'preview'; // 'preview' | 'source'
-            let _renderTimer = null;
-            const DEBOUNCE_MS = 400; // 防抖：串流時不頻繁重繪
 
-            const overlay  = () => document.getElementById('nova-canvas-overlay');
-            const iframe   = () => document.getElementById('nova-canvas-iframe');
-            const source   = () => document.getElementById('nova-canvas-source');
-            const loading  = () => document.getElementById('nova-canvas-loading');
-            const status   = () => document.getElementById('nova-canvas-status');
-            const title    = () => document.getElementById('nova-canvas-title');
-            const langEl   = () => document.getElementById('nova-canvas-lang');
-            const modeBtn  = () => document.getElementById('nova-canvas-mode-btn');
-            const modeIcon = () => document.getElementById('nova-canvas-mode-icon');
-            const modeLbl  = () => document.getElementById('nova-canvas-mode-label');
+                </script>
+<!-- ═══════════════════════════════════════════════════════
+         NOVA CANVAS — 全螢幕工作區覆層
+         z-[99980] 低於 novaPrompt(99999) 和 confirm(99990)
+    ════════════════════════════════════════════════════════ -->
+    <div id="nova-canvas-overlay"
+         style="display:none;position:fixed;inset:0;z-index:99980;background:#0a0f1e;flex-direction:column;touch-action:pan-y;"
+         class="flex">
 
-            // ── 渲染到 iframe（防抖）──────────────────────────────
-            function scheduleRender(immediate) {
-                if (_renderTimer) clearTimeout(_renderTimer);
-                if (immediate) { _doRender(); return; }
-                _renderTimer = setTimeout(_doRender, DEBOUNCE_MS);
-            }
+        <!-- Canvas Header -->
+        <div id="nova-canvas-header"
+             style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f172a;border-bottom:1px solid #1e293b;flex-shrink:0;min-height:52px;">
+            <!-- 返回聊天 -->
+            <button onclick="novaCanvas.hide()"
+                    style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#1e293b;color:#94a3b8;flex-shrink:0;border:none;cursor:pointer;"
+                    ontouchstart="" class="active:scale-90 transition-transform">
+                <i class="ph-bold ph-arrow-left" style="font-size:18px;"></i>
+            </button>
+            <!-- 標題 -->
+            <div style="flex:1;overflow:hidden;">
+                <p id="nova-canvas-title" style="font-size:13px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Canvas 工作區</p>
+                <p id="nova-canvas-lang" style="font-size:10px;color:#64748b;margin-top:1px;">HTML</p>
+            </div>
+            <!-- 工具列 -->
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <!-- 重新整理 -->
+                <button onclick="novaCanvas.refresh()"
+                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
+                        ontouchstart="" class="active:scale-90 transition-transform" title="重新整理">
+                    <i class="ph-bold ph-arrow-clockwise" style="font-size:16px;"></i>
+                </button>
+                <!-- 切換：預覽 / 原始碼 -->
+                <button id="nova-canvas-mode-btn" onclick="novaCanvas.toggleMode()"
+                        style="display:flex;align-items:center;gap:4px;padding:0 10px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;font-size:11px;font-weight:700;"
+                        ontouchstart="" class="active:scale-90 transition-transform">
+                    <i id="nova-canvas-mode-icon" class="ph-bold ph-eye" style="font-size:15px;"></i>
+                    <span id="nova-canvas-mode-label">預覽</span>
+                </button>
+                <!-- 複製程式碼 -->
+                <button onclick="novaCanvas.copyCode()"
+                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
+                        ontouchstart="" class="active:scale-90 transition-transform" title="複製程式碼">
+                    <i class="ph-bold ph-copy" style="font-size:16px;"></i>
+                </button>
+            </div>
+        </div>
 
-            function _doRender() {
-                const el = loading();
-                if (el) { el.style.display = 'flex'; }
-                const fr = iframe();
-                if (!fr) return;
+        <!-- Canvas 主體 -->
+        <div style="flex:1;overflow:hidden;position:relative;">
+            <!-- iframe 預覽（安全沙盒） -->
+            <iframe id="nova-canvas-iframe"
+                    sandbox="allow-scripts allow-forms allow-pointer-lock allow-popups allow-modals"
+                    style="width:100%;height:100%;border:none;background:#fff;display:block;"
+                    title="Canvas 預覽"></iframe>
 
-                const isWebLang = ['html','css','javascript','js','jsx','tsx','vue','svelte'].includes(_lang.toLowerCase());
+            <!-- 原始碼檢視 -->
+            <textarea id="nova-canvas-source"
+                      style="display:none;width:100%;height:100%;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:12px;line-height:1.6;padding:16px;border:none;outline:none;resize:none;white-space:pre;overflow-wrap:normal;overflow-x:auto;"
+                      readonly></textarea>
 
-                let doc = _code;
-                if (_lang.toLowerCase() === 'css') {
-                    doc = `<!DOCTYPE html><html><head><style>${_code}</style></head><body><p style="color:#64748b;font-family:monospace;padding:16px;">CSS 已套用（無 HTML 內容）</p></body></html>`;
-                } else if (['javascript','js'].includes(_lang.toLowerCase())) {
-                    doc = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
-${_code}
-<\/script></body></html>`;
-                } else if (!isWebLang) {
-                    // 非 Web 語言：顯示原始碼
-                    doc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px;line-height:1.7;padding:16px;white-space:pre-wrap;word-break:break-all;}</style></head><body>${_code.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</body></html>`;
-                }
+            <!-- 載入中遮罩 -->
+            <div id="nova-canvas-loading"
+                 style="display:none;position:absolute;inset:0;background:#0a0f1e;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
+                <div style="width:36px;height:36px;border:3px solid #1e293b;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+                <p style="color:#64748b;font-size:13px;">渲染中...</p>
+            </div>
+        </div>
 
-                // 用 srcdoc 直接注入，不觸發額外網路請求
-                fr.srcdoc = doc;
-                fr.onload = function() {
-                    const el2 = loading();
-                    if (el2) el2.style.display = 'none';
-                    if (status()) status().textContent = '渲染完成 · ' + new Date().toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
-                };
-            }
+        <!-- Canvas 底部狀態列 -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#0f172a;border-top:1px solid #1e293b;flex-shrink:0;min-height:40px;">
+            <p id="nova-canvas-status" style="font-size:10px;color:#475569;">就緒</p>
+            <button onclick="novaCanvas.hide()"
+                    style="font-size:11px;font-weight:700;color:#3b82f6;background:none;border:none;cursor:pointer;padding:4px 8px;">
+                ← 返回對話
+            </button>
+        </div>
+    </div>
 
-            // ── 公開 API ─────────────────────────────────────────
-            return {
-                // 從對話卡片開啟
-                openFromCard: function(cardEl) {
-                    const encoded = cardEl.getAttribute('data-code');
-                    const lang = cardEl.getAttribute('data-lang') || 'html';
-                    const code = decodeURIComponent(encoded);
-                    this.open(code, lang);
-                },
+    <!-- Canvas 聊天中的浮動卡片（點擊可打開工作區）-->
+    <!-- 由 JS 動態插入到 chat-container -->
 
-                // 從 + 選單開啟（顯示空白工作區）
-                openFromPlus: function() {
-                    const lastCode = window._novaCanvasLastCode || '';
-                    const lastLang = window._novaCanvasLastLang || 'html';
-                    if (lastCode) {
-                        this.open(lastCode, lastLang);
-                    } else {
-                        this.open('<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Canvas</title></head>
-<body style="margin:0;background:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#64748b;">
-  <p>在聊天中讓 AI 生成程式碼，將自動在此顯示</p>
-</body>
-</html>', 'html');
-                    }
-                },
-
-                open: function(code, lang) {
-                    _code = code;
-                    _lang = lang || 'html';
-                    window._novaCanvasLastCode = code;
-                    window._novaCanvasLastLang = _lang;
-
-                    // 更新標題與語言標籤
-                    if (title()) title().textContent = 'Canvas 工作區';
-                    if (langEl()) langEl().textContent = _lang.toUpperCase();
-                    if (source()) source().value = code;
-
-                    // 重設為預覽模式
-                    _mode = 'preview';
-                    this._syncModeUI();
-
-                    // 顯示 overlay
-                    const ov = overlay();
-                    if (ov) { ov.style.display = 'flex'; }
-
-                    // 渲染（立即）
-                    scheduleRender(true);
-                },
-
-                hide: function() {
-                    const ov = overlay();
-                    if (ov) ov.style.display = 'none';
-                },
-
-                refresh: function() {
-                    scheduleRender(true);
-                    if (status()) status().textContent = '重新渲染中...';
-                },
-
-                toggleMode: function() {
-                    _mode = _mode === 'preview' ? 'source' : 'preview';
-                    this._syncModeUI();
-                },
-
-                _syncModeUI: function() {
-                    const fr = iframe();
-                    const src = source();
-                    const icon = modeIcon();
-                    const lbl = modeLbl();
-                    if (_mode === 'preview') {
-                        if (fr) fr.style.display = 'block';
-                        if (src) src.style.display = 'none';
-                        if (icon) icon.className = 'ph-bold ph-code';
-                        if (lbl) lbl.textContent = '程式碼';
-                    } else {
-                        if (fr) fr.style.display = 'none';
-                        if (src) { src.style.display = 'block'; src.value = _code; }
-                        if (icon) icon.className = 'ph-bold ph-eye';
-                        if (lbl) lbl.textContent = '預覽';
-                    }
-                },
-
-                copyCode: function() {
-                    if (!_code) return;
-                    if (navigator.clipboard) {
-                        navigator.clipboard.writeText(_code).then(() => {
-                            if (status()) status().textContent = '✅ 程式碼已複製';
-                            setTimeout(() => { if (status()) status().textContent = '就緒'; }, 2000);
-                        });
-                    }
-                },
-
-                // ★ 串流更新（AI 回覆中途呼叫，有防抖）
-                streamUpdate: function(code, lang) {
-                    _code = code;
-                    if (lang) _lang = lang;
-                    window._novaCanvasLastCode = code;
-                    window._novaCanvasLastLang = _lang;
-                    if (source()) source().value = code;
-                    if (overlay() && overlay().style.display !== 'none') {
-                        scheduleRender(false); // 防抖渲染
-                    }
-                }
-            };
-        })();
-
-        // ── 監聽 AI 串流，自動偵測程式碼並更新 Canvas ──────────
-        // 在 handleSendMessage 的 streaming 回呼中插入 canvas 更新
-        (function() {
-            // 攔截 addMessage：當 AI 訊息含有程式碼區塊時，更新 canvas 暫存
-            const _origAddMessage = window.addMessage;
-            window.addMessage = function(text, sender, ...rest) {
-                if (sender === 'ai' && text) {
-                    const codeMatch = text.match(/```(html|css|javascript|js|jsx|tsx|vue|python|py|typescript|ts|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)([\s\S]*?)```/i);
-                    if (codeMatch) {
-                        const lang = codeMatch[1];
-                        const code = codeMatch[2].replace(/^\n/, '').replace(/\n$/, '');
-                        window._novaCanvasLastCode = code;
-                        window._novaCanvasLastLang = lang;
-                        // 若 Canvas 已開啟，自動更新
-                        const ov = document.getElementById('nova-canvas-overlay');
-                        if (ov && ov.style.display !== 'none') {
-                            novaCanvas.streamUpdate(code, lang);
-                        }
-                        // 閃爍 Canvas 按鈕提示
-                        const plusBtn = document.querySelector('[onclick*="openFromPlus"]');
-                        if (plusBtn) {
-                            plusBtn.style.borderColor = '#38bdf8';
-                            plusBtn.style.boxShadow = '0 0 12px rgba(56,189,248,0.4)';
-                            setTimeout(() => {
-                                plusBtn.style.borderColor = '';
-                                plusBtn.style.boxShadow = '';
-                            }, 3000);
-                        }
-                    }
-                }
-                return _origAddMessage ? _origAddMessage.call(this, text, sender, ...rest) : null;
-            };
-        })();
-
-        </script>
 
 </body>
 </html>
