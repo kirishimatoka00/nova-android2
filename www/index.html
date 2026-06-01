@@ -11145,9 +11145,8 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                 } else if (['python','py'].indexOf(lang) !== -1) {
                     var hasInput = /\binput\s*\(/.test(_code);
                     var hasMatplotlib = /matplotlib|plt\.|pyplot/.test(_code);
-                    var processedCode = hasInput
-                        ? _code.replace(/\binput\s*\(([^)]*)\)/g, 'prompt($1) or ""')
-                        : _code;
+                    // input() 透過 py.globals.set 注入，不需要在原始碼替換
+                    var processedCode = _code;
                     // 若有 matplotlib，加入轉 base64 圖片的 patch
                     if (hasMatplotlib) {
                         processedCode = 'import io, base64\n'
@@ -11199,6 +11198,10 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                         + '    sp.textContent="▶";'
                         + (hasMatplotlib ? 'st.textContent="載入 matplotlib...";await py.loadPackage(["matplotlib","numpy"]);' : '')
                         + '    st.textContent="執行中...";'
+                        + '    // ★ 把 JS 的 prompt() 注入到 Python 命名空間'
+                        + '    py.globals.set("input", function(msg) {'
+                        + '      return window.prompt(msg || "") || "";'
+                        + '    });'
                         + '    try{'
                         + '      await py.runPythonAsync(pyCode);'
                         + '      sp.textContent="✅";st.textContent="執行完成";'
