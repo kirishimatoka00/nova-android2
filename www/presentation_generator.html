@@ -122,53 +122,6 @@
                 </button>
             </div>
 
-            <!-- Settings bottom sheet (fixed, always fits screen) -->
-            <div id="pg-settings-overlay" onclick="closePgSettingsMenu()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(2px);"></div>
-            <div id="pg-settings-menu" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;background:#0f172a;border-top:1px solid #334155;padding-bottom:env(safe-area-inset-bottom);">
-                <!-- Handle -->
-                <div style="display:flex;justify-content:center;padding:10px 0 6px;">
-                    <div style="width:36px;height:4px;border-radius:2px;background:#334155;"></div>
-                </div>
-                <!-- Header -->
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 16px 12px;">
-                    <span style="font-size:13px;font-weight:700;color:#e2e8f0;">⚙️ 設定</span>
-                    <button onclick="closePgSettingsMenu()" style="color:#64748b;background:none;border:none;font-size:18px;cursor:pointer;padding:4px;"><i class="ph-bold ph-x"></i></button>
-                </div>
-                <!-- API 金鑰區 -->
-                <div class="p-4 border-b border-slate-800">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-[11px] text-slate-500 font-bold uppercase tracking-wide">API 金鑰</span>
-                        <button onclick="window.syncKeysFromMainApp()" class="text-[10px] px-2 py-1 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 border border-blue-500/30 transition-colors">🔄 同步主程式</button>
-                    </div>
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2"><i class="ph-fill ph-key text-blue-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Gemini: <span id="api-gemini-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gemini')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                        <div class="flex items-center gap-2"><i class="ph-fill ph-lightning text-slate-300 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Grok: <span id="api-grok-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('grok')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                        <div class="flex items-center gap-2"><i class="ph-fill ph-magnifying-glass text-emerald-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">SerpAPI: <span id="api-serp-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('serpapi')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                        <div class="flex items-center gap-2 pt-2 border-t border-slate-800"><i class="ph-fill ph-cloud-arrow-up text-indigo-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">GAS: <span id="api-gas-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gas')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                    </div>
-                </div>
-                <!-- 歷史備份/還原 -->
-                <div class="p-4 border-b border-slate-800">
-                    <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-3">簡報生成歷史</p>
-                    <div class="flex gap-3">
-                        <button onclick="exportPgHistory()" class="flex-1 flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl transition-colors">
-                            <i class="ph-bold ph-download-simple"></i>匯出備份
-                        </button>
-                        <label class="flex-1 flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl transition-colors cursor-pointer">
-                            <i class="ph-bold ph-upload-simple"></i>匯入還原
-                            <input type="file" accept=".json" class="hidden" onchange="importPgHistory(event)">
-                        </label>
-                    </div>
-                </div>
-                <!-- 外觀 -->
-                <div class="p-4">
-                    <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-3">外觀</p>
-                    <button onclick="togglePgTheme()" class="w-full flex items-center gap-3 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[13px] font-medium transition-colors">
-                        <i id="pg-theme-icon-menu" class="ph-bold ph-moon"></i>
-                        <span id="pg-theme-label">黑夜模式（與主程式同步）</span>
-                    </button>
-                </div>
-            </div>
             <button onclick="openHistoryModal()" class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl transition-all relative">
                 <i class="ph-bold ph-clock-counter-clockwise"></i>
                 <span class="hidden sm:inline">歷史記錄</span>
@@ -6826,5 +6779,54 @@ async function saveOrDownload(content, filename, mimeType) {
     }
 }
 </script>
+
+<!-- Settings bottom sheet (fixed, always fits screen) -->
+<div id="pg-settings-overlay" onclick="closePgSettingsMenu()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(2px);"></div>
+<div id="pg-settings-menu" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;background:#0f172a;border-top:1px solid #334155;padding-bottom:env(safe-area-inset-bottom);">
+    <!-- Handle -->
+    <div style="display:flex;justify-content:center;padding:10px 0 6px;">
+        <div style="width:36px;height:4px;border-radius:2px;background:#334155;"></div>
+    </div>
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 16px 12px;">
+        <span style="font-size:13px;font-weight:700;color:#e2e8f0;">⚙️ 設定</span>
+        <button onclick="closePgSettingsMenu()" style="color:#64748b;background:none;border:none;font-size:18px;cursor:pointer;padding:4px;"><i class="ph-bold ph-x"></i></button>
+    </div>
+    <!-- API 金鑰區 -->
+    <div class="p-4 border-b border-slate-800">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[11px] text-slate-500 font-bold uppercase tracking-wide">API 金鑰</span>
+            <button onclick="window.syncKeysFromMainApp()" class="text-[10px] px-2 py-1 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 border border-blue-500/30 transition-colors">🔄 同步主程式</button>
+        </div>
+        <div class="space-y-2">
+            <div class="flex items-center gap-2"><i class="ph-fill ph-key text-blue-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Gemini: <span id="api-gemini-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gemini')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+            <div class="flex items-center gap-2"><i class="ph-fill ph-lightning text-slate-300 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Grok: <span id="api-grok-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('grok')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+            <div class="flex items-center gap-2"><i class="ph-fill ph-magnifying-glass text-emerald-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">SerpAPI: <span id="api-serp-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('serpapi')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-800"><i class="ph-fill ph-cloud-arrow-up text-indigo-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">GAS: <span id="api-gas-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gas')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+        </div>
+    </div>
+    <!-- 歷史備份/還原 -->
+    <div class="p-4 border-b border-slate-800">
+        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-3">簡報生成歷史</p>
+        <div class="flex gap-3">
+            <button onclick="exportPgHistory()" class="flex-1 flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl transition-colors">
+                <i class="ph-bold ph-download-simple"></i>匯出備份
+            </button>
+            <label class="flex-1 flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl transition-colors cursor-pointer">
+                <i class="ph-bold ph-upload-simple"></i>匯入還原
+                <input type="file" accept=".json" class="hidden" onchange="importPgHistory(event)">
+            </label>
+        </div>
+    </div>
+    <!-- 外觀 -->
+    <div class="p-4">
+        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-3">外觀</p>
+        <button onclick="togglePgTheme()" class="w-full flex items-center gap-3 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[13px] font-medium transition-colors">
+            <i id="pg-theme-icon-menu" class="ph-bold ph-moon"></i>
+            <span id="pg-theme-label">黑夜模式（與主程式同步）</span>
+        </button>
+    </div>
+</div>
+
 </body>
 </html>

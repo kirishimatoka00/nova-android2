@@ -11064,79 +11064,154 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                 const lang = _lang.toLowerCase();
                 let doc;
 
+                // ── HTML: 直接渲染 ─────────────────────────────────
                 if (lang === 'html') {
                     doc = _code;
 
+                // ── CSS: 包成 HTML ────────────────────────────────
                 } else if (lang === 'css') {
                     doc = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' + _code + '</style></head>'
-                        + '<body style="background:#1e293b;color:#94a3b8;font-family:sans-serif;padding:20px;">'
-                        + '<p>CSS 已套用（無 HTML 結構）</p></body></html>';
-
-                } else if (['javascript','js','jsx','tsx'].indexOf(lang) !== -1) {
-                    // JS：攔截 console 輸出顯示在畫面
-                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
-                        + '<style>*{box-sizing:border-box}body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
-                        + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;min-height:100vh}'
-                        + '.log{color:#e6edf3}.err{color:#f87171}.warn{color:#fbbf24}.info{color:#38bdf8}'
-                        + '</style></head><body><div id="output"></div>'
-                        + '<script>(function(){'
-                        + 'var out=document.getElementById("output");'
-                        + 'function pr(cls,args){var d=document.createElement("div");d.className=cls;'
-                        + 'd.textContent=Array.from(args).map(function(a){try{return typeof a==="object"?JSON.stringify(a,null,2):String(a);}catch(e){return String(a);}}).join(" ");'
-                        + 'out.appendChild(d);}'
-                        + 'var c=window.console;'
-                        + 'window.console={'
-                        + 'log:function(){pr("log",arguments);if(c&&c.log)c.log.apply(c,arguments);},'
-                        + 'error:function(){pr("err",arguments);if(c&&c.error)c.error.apply(c,arguments);},'
-                        + 'warn:function(){pr("warn",arguments);if(c&&c.warn)c.warn.apply(c,arguments);},'
-                        + 'info:function(){pr("info",arguments);if(c&&c.info)c.info.apply(c,arguments);}};'
-                        + 'window.onerror=function(msg,s,line){pr("err",["❌ 錯誤 line "+line+": "+msg]);return true;};'
-                        + '})();<\/script>'
-                        + '<script>\n' + _code.replace(/<\/script>/gi,'<\\/script>') + '\n<\/script>'
+                        + '<body style="background:#1e293b;color:#94a3b8;font-family:sans-serif;padding:24px;">'
+                        + '<h3 style="color:#64748b;font-size:12px;margin-bottom:12px;">CSS 已套用</h3>'
+                        + '<div class="preview-box">範例元素</div>'
                         + '</body></html>';
 
-                } else if (['python','py'].indexOf(lang) !== -1) {
-                    // Python：Pyodide WebAssembly 真正執行
-                    var safeCode = _code
-                        .replace(/\\/g,'\\\\')
-                        .replace(/`/g,'\\`');
+                // ── JSX / React: Babel 轉譯 + React 18 渲染 ───────
+                } else if (['jsx','tsx','react'].indexOf(lang) !== -1) {
+                    var reactCode = _code;
                     doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
-                        + '<style>*{box-sizing:border-box}body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
-                        + '#status{padding:10px 16px;background:#0f172a;border-bottom:1px solid #1e293b;color:#38bdf8;display:flex;align-items:center;gap:8px;font-size:12px}'
-                        + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;min-height:calc(100vh - 44px)}'
-                        + '.err{color:#f87171}.ok{color:#4ade80}</style></head><body>'
+                        + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                        + '<script src="https://unpkg.com/react@18/umd/react.development.js"><\/script>'
+                        + '<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>'
+                        + '<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>'
+                        + '<style>*{box-sizing:border-box}body{margin:0;font-family:sans-serif;background:#fff}'
+                        + '#root{min-height:100vh}.err-banner{background:#fef2f2;color:#dc2626;padding:12px 16px;'
+                        + 'font-family:monospace;font-size:12px;white-space:pre-wrap;border-left:3px solid #dc2626;margin:12px}'
+                        + '</style></head><body>'
+                        + '<div id="root"></div>'
+                        + '<script type="text/babel" data-presets="react,env">'
+                        + 'try {'
+                        + reactCode.replace(/<\/script>/gi, '<\\/script>')
+                        + '\n// Auto-render: find default export or last defined component\n'
+                        + 'const _root = ReactDOM.createRoot(document.getElementById("root"));\n'
+                        + 'const _exports = typeof exports !== "undefined" ? exports : {};\n'
+                        + 'const _comp = typeof App !== "undefined" ? App\n'
+                        + '  : typeof default_1 !== "undefined" ? default_1\n'
+                        + '  : typeof Component !== "undefined" ? Component : null;\n'
+                        + 'if (_comp) { _root.render(React.createElement(_comp)); }\n'
+                        + 'else { document.getElementById("root").innerHTML = "<div style=\\"padding:20px;color:#64748b;\\">⚠️ 找不到 React 元件（請確保有 App 或預設匯出）</div>"; }\n'
+                        + '} catch(e) {'
+                        + '  const b=document.createElement("div");b.className="err-banner";b.textContent="❌ "+e.message;document.body.prepend(b);'
+                        + '}'
+                        + '<\/script></body></html>';
+
+                // ── JavaScript: DOM 互動 + console 攔截 ───────────
+                } else if (['javascript','js'].indexOf(lang) !== -1) {
+                    // 判斷是 DOM 互動型（含 document. / querySelector 等）還是純 console 型
+                    var hasDom = /document\.|querySelector|getElementById|innerHTML|createElement|body\./.test(_code);
+                    if (hasDom) {
+                        // DOM 型：直接執行，錯誤顯示 banner
+                        doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                            + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                            + '<style>*{box-sizing:border-box}body{margin:0;font-family:sans-serif}'
+                            + '.err-banner{background:#fef2f2;color:#dc2626;padding:12px;font-family:monospace;font-size:12px;'
+                            + 'white-space:pre-wrap;border-left:3px solid #dc2626;position:fixed;top:0;left:0;right:0;z-index:9999}'
+                            + '</style></head><body>'
+                            + '<script>window.onerror=function(m,s,l){var b=document.createElement("div");b.className="err-banner";'
+                            + 'b.textContent="❌ line "+l+": "+m;document.body.prepend(b);return true;};<\/script>'
+                            + '<script>\n' + _code.replace(/<\/script>/gi,'<\\/script>') + '\n<\/script>'
+                            + '</body></html>';
+                    } else {
+                        // 純邏輯型：攔截 console 顯示輸出
+                        doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                            + '<style>*{box-sizing:border-box;margin:0}body{background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
+                            + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;min-height:100vh}'
+                            + '.log{color:#e6edf3}.err{color:#f87171}.warn{color:#fbbf24}.info{color:#38bdf8}'
+                            + '</style></head><body><div id="output"></div>'
+                            + '<script>(function(){'
+                            + 'var o=document.getElementById("output");'
+                            + 'function pr(cls,args){var d=document.createElement("div");d.className=cls;'
+                            + 'd.textContent=Array.from(args).map(function(a){try{return typeof a==="object"?JSON.stringify(a,null,2):String(a);}catch(e){return String(a);}}).join(" ");'
+                            + 'o.appendChild(d);}'
+                            + 'var c=window.console;'
+                            + 'window.console={log:function(){pr("log",arguments);},error:function(){pr("err",arguments);},warn:function(){pr("warn",arguments);},info:function(){pr("info",arguments);}};'
+                            + 'window.onerror=function(msg,s,line){pr("err",["❌ line "+line+": "+msg]);return true;};'
+                            + '})();<\/script>'
+                            + '<script>\n' + _code.replace(/<\/script>/gi,'<\\/script>') + '\n<\/script>'
+                            + '</body></html>';
+                    }
+
+                // ── Python: Pyodide + matplotlib 支援 ────────────
+                } else if (['python','py'].indexOf(lang) !== -1) {
+                    var hasInput = /\binput\s*\(/.test(_code);
+                    var hasMatplotlib = /matplotlib|plt\.|pyplot/.test(_code);
+                    var processedCode = hasInput
+                        ? _code.replace(/\binput\s*\(([^)]*)\)/g, 'prompt($1) or ""')
+                        : _code;
+                    // 若有 matplotlib，加入轉 base64 圖片的 patch
+                    if (hasMatplotlib) {
+                        processedCode = 'import io, base64\n'
+                            + 'import matplotlib\nmatplotlib.use("Agg")\n'
+                            + processedCode
+                            + '\n\nimport matplotlib.pyplot as _plt\n'
+                            + '_buf = io.BytesIO()\n'
+                            + '_plt.savefig(_buf, format="png", bbox_inches="tight", dpi=120)\n'
+                            + '_buf.seek(0)\n'
+                            + '_b64 = base64.b64encode(_buf.read()).decode()\n'
+                            + 'from js import document as _doc\n'
+                            + '_img = _doc.createElement("img")\n'
+                            + '_img.src = "data:image/png;base64," + _b64\n'
+                            + '_img.style.maxWidth = "100%"\n'
+                            + '_doc.getElementById("output").appendChild(_img)\n';
+                    }
+                    var safeCode = processedCode.replace(/\\/g,'\\\\').replace(/`/g,'\\`');
+                    var pkgs = hasMatplotlib ? '"matplotlib","numpy"' : '""';
+                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                        + '<style>*{box-sizing:border-box;margin:0;padding:0}'
+                        + 'body{background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
+                        + '#status{padding:10px 16px;background:#0f172a;border-bottom:1px solid #1e293b;'
+                        + 'color:#38bdf8;display:flex;align-items:center;gap:8px;font-size:12px;position:sticky;top:0}'
+                        + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;word-break:break-all}'
+                        + '.err{color:#f87171;background:#1c0a0a;padding:8px 12px;border-radius:8px;border-left:3px solid #f87171;margin:4px 0}'
+                        + 'img{border-radius:8px;margin-top:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}'
+                        + (hasInput ? '#hint{padding:8px 16px;color:#fbbf24;font-size:11px;background:#1c1500;border-top:1px solid #292000}' : '')
+                        + '</style></head><body>'
                         + '<div id="status"><span id="sp">⏳</span><span id="st">載入 Python (Pyodide)...</span></div>'
-                        + '<div id="output"></div>'
+                        + (hasInput ? '<div id="hint">⚠️ 此程式使用 input()，將以對話框輸入</div>' : '')
+                        + '<div id="output"><span style="color:#475569">執行中...</span></div>'
                         + '<script>'
                         + 'var pyCode=`' + safeCode + '`;'
                         + 'var out=document.getElementById("output");'
                         + 'var st=document.getElementById("st");'
                         + 'var sp=document.getElementById("sp");'
-                        + 'function ap(t,cls){var d=document.createElement("div");if(cls)d.className=cls;d.textContent=t;out.appendChild(d);}'
+                        + 'function clr(){if(out.querySelector("span"))out.innerHTML="";}'
+                        + 'function ap(t,cls){clr();var d=document.createElement("div");if(cls)d.className=cls;d.textContent=t;out.appendChild(d);}'
+                        + 'function getMsg(e){return e&&e.message?e.message:e&&e.toString&&e.toString()!=="[object Object]"?e.toString():String(e);}'
                         + 'var s=document.createElement("script");'
                         + 's.src="https://cdn.jsdelivr.net/pyodide/v0.27.5/full/pyodide.js";'
                         + 's.onload=function(){'
-                        + '  st.textContent="初始化 Python...";'
-                        + '  loadPyodide({indexURL:"https://cdn.jsdelivr.net/pyodide/v0.27.5/full/"}).then(function(py){'
-                        + '    sp.textContent="✅";st.textContent="執行中...";'
-                        + '    py.runPython("import sys,io\\n_o=io.StringIO()\\n_e=io.StringIO()\\nsys.stdout=_o\\nsys.stderr=_e");'
+                        + '  st.textContent="初始化...";'
+                        + '  loadPyodide({'
+                        + '    indexURL:"https://cdn.jsdelivr.net/pyodide/v0.27.5/full/",'
+                        + '    stdout:function(t){clr();var d=document.createElement("div");d.textContent=t;out.appendChild(d);},'
+                        + '    stderr:function(t){clr();var d=document.createElement("div");d.className="err";d.textContent=t;out.appendChild(d);}'
+                        + '  }).then(async function(py){'
+                        + '    sp.textContent="▶";'
+                        + (hasMatplotlib ? 'st.textContent="載入 matplotlib...";await py.loadPackage(["matplotlib","numpy"]);' : '')
+                        + '    st.textContent="執行中...";'
                         + '    try{'
-                        + '      py.runPython(pyCode);'
-                        + '      var o=py.runPython("_o.getvalue()");'
-                        + '      var e=py.runPython("_e.getvalue()");'
-                        + '      st.textContent="執行完成";'
-                        + '      if(o&&o.trim())ap(o);'
-                        + '      if(e&&e.trim())ap(e,"err");'
-                        + '      if(!o&&!e)ap("（執行完畢，無輸出）");'
-                        + '    }catch(ex){sp.textContent="❌";st.textContent="錯誤";ap(String(ex),"err");}'
-                        + '  }).catch(function(ex){sp.textContent="❌";st.textContent="載入失敗";ap(String(ex),"err");});'
+                        + '      await py.runPythonAsync(pyCode);'
+                        + '      sp.textContent="✅";st.textContent="執行完成";'
+                        + '      if(!out.children.length)ap("（執行完畢，無輸出）");'
+                        + '    }catch(ex){sp.textContent="❌";st.textContent="執行錯誤";ap(getMsg(ex),"err");}'
+                        + '  }).catch(function(ex){sp.textContent="❌";st.textContent="載入失敗";ap(getMsg(ex),"err");});'
                         + '};'
-                        + 's.onerror=function(){sp.textContent="❌";st.textContent="無法載入 Pyodide（請確認網路連線）";};'
+                        + 's.onerror=function(){sp.textContent="❌";st.textContent="無法載入 Pyodide（需要網路連線）";};'
                         + 'document.head.appendChild(s);'
                         + '<\/script></body></html>';
 
+                // ── 其他語言: 顯示原始碼 ─────────────────────────
                 } else {
-                    // 其他語言：顯示原始碼 + 說明
                     var esc = _code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                     doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
                         + '<style>body{margin:0;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px;line-height:1.7}'
