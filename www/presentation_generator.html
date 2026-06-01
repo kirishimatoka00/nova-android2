@@ -98,27 +98,22 @@
 
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 <header class="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/70">
-    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3 min-w-0">
-            <a href="./index.html" class="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm font-medium">
-                <i class="ph-bold ph-arrow-left"></i><span class="hidden sm:inline">返回 NOVA 120</span>
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 shrink-0">
+            <a href="./index.html" class="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm font-medium whitespace-nowrap">
+                <i class="ph-bold ph-arrow-left"></i><span class="hidden sm:inline">返回</span>
             </a>
             <div class="w-px h-5 bg-slate-700"></div>
-            <h1 class="text-sm font-bold text-white truncate">AI HTML 簡報生成器 v33 Pro</h1>
         </div>
-        <div class="flex items-center gap-2">
-            <div id="header-model-badge" class="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full">
+        <div class="flex items-center gap-2 flex-1 justify-end overflow-x-auto">
+            <div id="header-model-badge" class="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full shrink-0">
                 <i class="ph-fill ph-cpu text-violet-400"></i><span id="header-model-name">檢測中</span>
             </div>
-            <button onclick="togglePgTheme()" id="pg-theme-btn" title="切換白晝/黑夜模式"
-                class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-2 rounded-xl transition-all">
-                <i id="pg-theme-icon" class="ph-bold ph-sun"></i>
-            </button>
             <!-- ⚙️ 設定 Menu -->
-            <div class="relative" id="pg-settings-wrapper">
+            <div class="relative shrink-0" id="pg-settings-wrapper">
                 <button onclick="togglePgSettingsMenu()" id="pg-settings-btn" title="設定"
                     class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-2 rounded-xl transition-all">
-                    <i class="ph-bold ph-gear"></i><span class="hidden sm:inline">設定</span>
+                    <i class="ph-bold ph-gear"></i>
                 </button>
             </div>
 
@@ -127,14 +122,14 @@
                 <span class="hidden sm:inline">歷史記錄</span>
                 <span id="history-badge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center"></span>
             </button>
-            <button id="btn-preview-html" onclick="previewAllSlides()" class="hidden items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
+            <button id="btn-preview-html" onclick="previewAllSlides()" class="hidden items-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-2.5 py-2 rounded-xl transition-all shrink-0">
                 <i class="ph-bold ph-browser"></i><span>預覽</span>
             </button>
-            <button id="btn-save-html" onclick="saveAllSlidesAsHTML()" class="hidden items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
+            <button id="btn-save-html" onclick="saveAllSlidesAsHTML()" class="hidden items-center gap-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-2.5 py-2 rounded-xl transition-all shrink-0">
                 <i class="ph-bold ph-file-html"></i><span>存 HTML</span>
             </button>
             <!-- PPTX split button -->
-            <div id="btn-pptx-group" class="hidden items-center relative">
+            <div id="btn-pptx-group" class="hidden items-center relative shrink-0">
                 <button onclick="downloadPptx('image')" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-l-xl transition-all shadow-lg border-r border-emerald-700">
                     <i class="ph-bold ph-download-simple"></i><span>PPTX</span>
                 </button>
@@ -152,11 +147,11 @@
                     </button>
                 </div>
             </div>
-            <button id="btn-generate" onclick="startGeneration()" class="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-lg btn-pulse">
+            <button id="btn-generate" onclick="startGeneration()" class="flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-lg btn-pulse shrink-0">
                 <i class="ph-bold ph-sparkle"></i><span>開始生成</span>
             </button>
-            <button id="btn-stop" onclick="stopGeneration()" class="hidden items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
-                <i class="ph-bold ph-stop"></i><span>停止生成</span>
+            <button id="btn-stop" onclick="stopGeneration()" class="hidden items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all shrink-0">
+                <i class="ph-bold ph-stop"></i><span>停止</span>
             </button>
         </div>
     </div>
