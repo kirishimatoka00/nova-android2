@@ -3,7 +3,7 @@
   "appName": "NOVA 120 SSP",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "http"
   },
   "plugins": {
     "CapacitorHttp": {
