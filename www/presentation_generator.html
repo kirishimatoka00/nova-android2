@@ -34,74 +34,23 @@
     <style>
         :root { background-color: #020617; color-scheme: dark; }
 
-        /* ── 主題色彩變數系統 ─────────────────────────────────── */
-        :root, [data-theme="dark"] {
-            --pg-bg:         #020617;
-            --pg-surface:    #0f172a;
-            --pg-card:       #1e293b;
-            --pg-border:     #334155;
-            --pg-text:       #e2e8f0;
-            --pg-text-muted: #94a3b8;
-            --pg-text-dim:   #64748b;
-            --pg-input-bg:   #0f172a;
-            --pg-hover:      #1e293b;
-            --pg-accent:     #6366f1;
-            color-scheme: dark;
+        /* ── 主題：與主程式相同的全局反色方案 ─────────────────────
+           白晝模式 = filter:invert(1) hue-rotate(180deg) 套用於 html
+           與主程式 NOVA 完全一致；header/所有面板全部自動跟著反色
+        ────────────────────────────────────────────────────────── */
+        html.pg-light-mode {
+            filter: invert(1) hue-rotate(180deg) brightness(1.05);
         }
-        [data-theme="light"] {
-            --pg-bg:         #f1f5f9;
-            --pg-surface:    #ffffff;
-            --pg-card:       #f8fafc;
-            --pg-border:     #e2e8f0;
-            --pg-text:       #1e293b;
-            --pg-text-muted: #475569;
-            --pg-text-dim:   #94a3b8;
-            --pg-input-bg:   #ffffff;
-            --pg-hover:      #f1f5f9;
-            --pg-accent:     #6366f1;
-            color-scheme: light;
+        /* 投影片預覽、圖片、彩色輸入需反轉回原色 */
+        html.pg-light-mode img,
+        html.pg-light-mode video,
+        html.pg-light-mode canvas,
+        html.pg-light-mode iframe,
+        html.pg-light-mode .keep-color,
+        html.pg-light-mode [style*="background-image"],
+        html.pg-light-mode input[type="color"] {
+            filter: invert(1) hue-rotate(180deg) !important;
         }
-        /* 全局 */
-        body { background-color: var(--pg-bg) !important; color: var(--pg-text) !important; }
-        /* Header 白晝模式保持深色 */
-        [data-theme="light"] header { background-color: #1e293b !important; border-bottom-color: #334155 !important; }
-        /* Surfaces */
-        [data-theme="light"] .bg-slate-950 { background-color: #f1f5f9 !important; }
-        [data-theme="light"] .bg-slate-900 { background-color: #ffffff !important; }
-        [data-theme="light"] .bg-slate-800 { background-color: #f1f5f9 !important; }
-        [data-theme="light"] .bg-slate-700 { background-color: #e2e8f0 !important; }
-        /* Tab-bar & button groups - keep slight dark tint for readability */
-        [data-theme="light"] .bg-slate-950.p-1 { background-color: #e2e8f0 !important; }
-        /* Borders */
-        [data-theme="light"] .border-slate-800,
-        [data-theme="light"] .border-slate-700 { border-color: #cbd5e1 !important; }
-        /* Text */
-        [data-theme="light"] .text-white,
-        [data-theme="light"] .text-slate-100,
-        [data-theme="light"] .text-slate-200,
-        [data-theme="light"] .text-slate-300 { color: #1e293b !important; }
-        [data-theme="light"] .text-slate-400 { color: #475569 !important; }
-        [data-theme="light"] .text-slate-500 { color: #64748b !important; }
-        [data-theme="light"] .text-slate-600 { color: #94a3b8 !important; }
-        /* Inputs */
-        [data-theme="light"] input:not([type=color]),
-        [data-theme="light"] textarea,
-        [data-theme="light"] select { background-color: #ffffff !important; color: #1e293b !important; border-color: #cbd5e1 !important; }
-        [data-theme="light"] input::placeholder,
-        [data-theme="light"] textarea::placeholder { color: #94a3b8 !important; }
-        /* Buttons - contrast fix */
-        [data-theme="light"] button.bg-slate-800,
-        [data-theme="light"] button.bg-slate-700 { background-color: #e2e8f0 !important; color: #1e293b !important; }
-        [data-theme="light"] button.bg-slate-800:hover,
-        [data-theme="light"] button.bg-slate-700:hover { background-color: #cbd5e1 !important; color: #0f172a !important; }
-        [data-theme="light"] .hover\:bg-slate-700:hover { background-color: #cbd5e1 !important; }
-        [data-theme="light"] .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
-        /* Edit viewport */
-        [data-theme="light"] #edit-slide-viewport { background-color: #e2e8f0 !important; }
-        /* Logs */
-        [data-theme="light"] #log-container { background-color: #f8fafc !important; color: #1e293b !important; }
-        /* Settings menu */
-        [data-theme="light"] #pg-settings-menu { background-color: #ffffff; border-color: #e2e8f0; }
         html, body { background-color: #020617; min-height: 100vh; font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif; }
 
         /* ✅ 文字選取白框修正 */
@@ -149,78 +98,38 @@
 
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 <header class="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/70">
-    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3 min-w-0">
-            <a href="./index.html" class="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm font-medium">
-                <i class="ph-bold ph-arrow-left"></i><span class="hidden sm:inline">返回 NOVA 120</span>
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 shrink-0">
+            <a href="./index.html" class="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm font-medium whitespace-nowrap">
+                <i class="ph-bold ph-arrow-left"></i><span class="hidden sm:inline">返回</span>
             </a>
             <div class="w-px h-5 bg-slate-700"></div>
-            <h1 class="text-sm font-bold text-white truncate">AI HTML 簡報生成器 v33 Pro</h1>
         </div>
-        <div class="flex items-center gap-2">
-            <div id="header-model-badge" class="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full">
+        <div class="flex items-center gap-2 flex-1 justify-end overflow-x-auto">
+            <div id="header-model-badge" class="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full shrink-0">
                 <i class="ph-fill ph-cpu text-violet-400"></i><span id="header-model-name">檢測中</span>
             </div>
-            <button onclick="togglePgTheme()" id="pg-theme-btn" title="切換白晝/黑夜模式"
-                class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-2 rounded-xl transition-all">
-                <i id="pg-theme-icon" class="ph-bold ph-sun"></i>
-            </button>
             <!-- ⚙️ 設定 Menu -->
-            <div class="relative" id="pg-settings-wrapper">
+            <div class="relative shrink-0" id="pg-settings-wrapper">
                 <button onclick="togglePgSettingsMenu()" id="pg-settings-btn" title="設定"
                     class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-2 rounded-xl transition-all">
-                    <i class="ph-bold ph-gear"></i><span class="hidden sm:inline">設定</span>
+                    <i class="ph-bold ph-gear"></i>
                 </button>
-                <div id="pg-settings-menu" class="hidden absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-[200] overflow-hidden">
-                    <!-- API 金鑰區 -->
-                    <div class="p-3 border-b border-slate-800">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-[11px] text-slate-500 font-bold uppercase tracking-wide">API 金鑰</span>
-                            <button onclick="window.syncKeysFromMainApp()" class="text-[10px] px-2 py-1 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 border border-blue-500/30 transition-colors">🔄 同步主程式</button>
-                        </div>
-                        <div class="space-y-1.5">
-                            <div class="flex items-center gap-2"><i class="ph-fill ph-key text-blue-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Gemini: <span id="api-gemini-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gemini')" class="text-[10px] px-2 py-0.5 rounded-md bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                            <div class="flex items-center gap-2"><i class="ph-fill ph-lightning text-slate-300 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Grok: <span id="api-grok-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('grok')" class="text-[10px] px-2 py-0.5 rounded-md bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                            <div class="flex items-center gap-2"><i class="ph-fill ph-magnifying-glass text-emerald-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">SerpAPI: <span id="api-serp-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('serpapi')" class="text-[10px] px-2 py-0.5 rounded-md bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                            <div class="flex items-center gap-2 pt-1 border-t border-slate-800"><i class="ph-fill ph-cloud-arrow-up text-indigo-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">GAS: <span id="api-gas-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gas')" class="text-[10px] px-2 py-0.5 rounded-md bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
-                        </div>
-                    </div>
-                    <!-- 歷史備份/還原 -->
-                    <div class="p-3 border-b border-slate-800">
-                        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-2">簡報生成歷史</p>
-                        <div class="flex gap-2">
-                            <button onclick="exportPgHistory()" class="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg transition-colors">
-                                <i class="ph-bold ph-download-simple"></i>匯出備份
-                            </button>
-                            <label class="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-lg transition-colors cursor-pointer">
-                                <i class="ph-bold ph-upload-simple"></i>匯入還原
-                                <input type="file" accept=".json" class="hidden" onchange="importPgHistory(event)">
-                            </label>
-                        </div>
-                    </div>
-                    <!-- 外觀 -->
-                    <div class="p-3">
-                        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-2">外觀</p>
-                        <button onclick="togglePgTheme()" class="w-full flex items-center gap-2 py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[12px] font-medium transition-colors">
-                            <i id="pg-theme-icon-menu" class="ph-bold ph-moon"></i>
-                            <span id="pg-theme-label">黑夜模式（與主程式同步）</span>
-                        </button>
-                    </div>
-                </div>
             </div>
+
             <button onclick="openHistoryModal()" class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl transition-all relative">
                 <i class="ph-bold ph-clock-counter-clockwise"></i>
                 <span class="hidden sm:inline">歷史記錄</span>
                 <span id="history-badge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center"></span>
             </button>
-            <button id="btn-preview-html" onclick="previewAllSlides()" class="hidden items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
+            <button id="btn-preview-html" onclick="previewAllSlides()" class="hidden items-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-2.5 py-2 rounded-xl transition-all shrink-0">
                 <i class="ph-bold ph-browser"></i><span>預覽</span>
             </button>
-            <button id="btn-save-html" onclick="saveAllSlidesAsHTML()" class="hidden items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
+            <button id="btn-save-html" onclick="saveAllSlidesAsHTML()" class="hidden items-center gap-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-2.5 py-2 rounded-xl transition-all shrink-0">
                 <i class="ph-bold ph-file-html"></i><span>存 HTML</span>
             </button>
             <!-- PPTX split button -->
-            <div id="btn-pptx-group" class="hidden items-center relative">
+            <div id="btn-pptx-group" class="hidden items-center relative shrink-0">
                 <button onclick="downloadPptx('image')" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-l-xl transition-all shadow-lg border-r border-emerald-700">
                     <i class="ph-bold ph-download-simple"></i><span>PPTX</span>
                 </button>
@@ -238,11 +147,11 @@
                     </button>
                 </div>
             </div>
-            <button id="btn-generate" onclick="startGeneration()" class="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-lg btn-pulse">
+            <button id="btn-generate" onclick="startGeneration()" class="flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-lg btn-pulse shrink-0">
                 <i class="ph-bold ph-sparkle"></i><span>開始生成</span>
             </button>
-            <button id="btn-stop" onclick="stopGeneration()" class="hidden items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
-                <i class="ph-bold ph-stop"></i><span>停止生成</span>
+            <button id="btn-stop" onclick="stopGeneration()" class="hidden items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all shrink-0">
+                <i class="ph-bold ph-stop"></i><span>停止</span>
             </button>
         </div>
     </div>
@@ -892,24 +801,34 @@ window.syncKeysFromMainApp = function() {
     else showToast('⚠️ 主程式尚未設定 API 金鑰，請在主程式「設定」中儲存');
 };
 
-// ── 設定 Menu ───────────────────────────────────────────────────
+// ── 設定 Menu (bottom sheet) ──────────────────────────────────
 window.togglePgSettingsMenu = function() {
     const menu = document.getElementById('pg-settings-menu');
+    const overlay = document.getElementById('pg-settings-overlay');
     if (!menu) return;
-    const isHidden = menu.classList.contains('hidden');
-    menu.classList.toggle('hidden', !isHidden);
-    if (!isHidden) return;
-    // Close when clicking outside
+    const isOpen = menu.style.display !== 'none';
+    if (isOpen) {
+        closePgSettingsMenu();
+    } else {
+        overlay.style.display = 'block';
+        menu.style.display = 'block';
+        // Slide up animation
+        menu.style.transform = 'translateY(100%)';
+        menu.style.transition = 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1)';
+        requestAnimationFrame(() => { menu.style.transform = 'translateY(0)'; });
+    }
+};
+
+window.closePgSettingsMenu = function() {
+    const menu = document.getElementById('pg-settings-menu');
+    const overlay = document.getElementById('pg-settings-overlay');
+    if (!menu) return;
+    menu.style.transform = 'translateY(100%)';
+    menu.style.transition = 'transform 0.25s ease-in';
     setTimeout(() => {
-        const handler = (e) => {
-            const wrapper = document.getElementById('pg-settings-wrapper');
-            if (wrapper && !wrapper.contains(e.target)) {
-                menu.classList.add('hidden');
-                document.removeEventListener('click', handler, true);
-            }
-        };
-        document.addEventListener('click', handler, true);
-    }, 0);
+        menu.style.display = 'none';
+        if (overlay) overlay.style.display = 'none';
+    }, 250);
 };
 
 // ── 歷史備份 / 還原 ────────────────────────────────────────────
@@ -925,7 +844,7 @@ window.exportPgHistory = function() {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         showToast(`✅ 已匯出 ${history.length} 筆歷史記錄`);
-        document.getElementById('pg-settings-menu')?.classList.add('hidden');
+        window.closePgSettingsMenu();
     } catch(e) { showToast('❌ 匯出失敗：' + e.message); }
 };
 
@@ -946,23 +865,24 @@ window.importPgHistory = function(event) {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(merged));
             renderHistoryPanels();
             showToast(`✅ 已還原 ${newEntries.length} 筆新記錄（共 ${merged.length} 筆）`);
-            document.getElementById('pg-settings-menu')?.classList.add('hidden');
+            window.closePgSettingsMenu();
         } catch(e) { showToast('❌ 匯入失敗：' + e.message); }
     };
     reader.readAsText(file);
     event.target.value = '';
 };
 
-// ── 主題同步（與主程式 nova_theme 連動）─────────────────────────
+// ── 主題同步（與主程式 nova_theme 連動，使用相同 invert 方案）──
 function applyPgTheme(theme) {
     const isDark = theme !== 'light';
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    document.documentElement.style.backgroundColor = isDark ? '#020617' : '#f1f5f9';
-    document.body.style.backgroundColor = isDark ? '#020617' : '#f1f5f9';
-    // Header theme button icon
+    const html = document.documentElement;
+    if (isDark) {
+        html.classList.remove('pg-light-mode');
+    } else {
+        html.classList.add('pg-light-mode');
+    }
     const icon = document.getElementById('pg-theme-icon');
     if (icon) icon.className = isDark ? 'ph-bold ph-moon' : 'ph-bold ph-sun';
-    // Settings menu icon + label
     const iconMenu = document.getElementById('pg-theme-icon-menu');
     const label = document.getElementById('pg-theme-label');
     if (iconMenu) iconMenu.className = isDark ? 'ph-bold ph-moon' : 'ph-bold ph-sun';
@@ -971,10 +891,11 @@ function applyPgTheme(theme) {
 }
 
 window.togglePgTheme = function() {
-    const cur = document.documentElement.getAttribute('data-theme') || 'dark';
-    applyPgTheme(cur === 'dark' ? 'light' : 'dark');
-    showToast(cur === 'dark' ? '☀️ 已切換為白晝模式' : '🌙 已切換為黑夜模式');
+    const isLight = document.documentElement.classList.contains('pg-light-mode');
+    applyPgTheme(isLight ? 'dark' : 'light');
+    showToast(isLight ? '🌙 已切換為黑夜模式' : '☀️ 已切換為白晝模式');
 };
+
 
 function init() {
     // ★ 讀取主程式主題設定（nova_theme）
@@ -6853,5 +6774,54 @@ async function saveOrDownload(content, filename, mimeType) {
     }
 }
 </script>
+
+<!-- Settings bottom sheet (fixed, always fits screen) -->
+<div id="pg-settings-overlay" onclick="closePgSettingsMenu()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(2px);"></div>
+<div id="pg-settings-menu" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;background:#0f172a;border-top:1px solid #334155;padding-bottom:env(safe-area-inset-bottom);">
+    <!-- Handle -->
+    <div style="display:flex;justify-content:center;padding:10px 0 6px;">
+        <div style="width:36px;height:4px;border-radius:2px;background:#334155;"></div>
+    </div>
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 16px 12px;">
+        <span style="font-size:13px;font-weight:700;color:#e2e8f0;">⚙️ 設定</span>
+        <button onclick="closePgSettingsMenu()" style="color:#64748b;background:none;border:none;font-size:18px;cursor:pointer;padding:4px;"><i class="ph-bold ph-x"></i></button>
+    </div>
+    <!-- API 金鑰區 -->
+    <div class="p-4 border-b border-slate-800">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-[11px] text-slate-500 font-bold uppercase tracking-wide">API 金鑰</span>
+            <button onclick="window.syncKeysFromMainApp()" class="text-[10px] px-2 py-1 rounded-lg bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 border border-blue-500/30 transition-colors">🔄 同步主程式</button>
+        </div>
+        <div class="space-y-2">
+            <div class="flex items-center gap-2"><i class="ph-fill ph-key text-blue-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Gemini: <span id="api-gemini-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gemini')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+            <div class="flex items-center gap-2"><i class="ph-fill ph-lightning text-slate-300 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">Grok: <span id="api-grok-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('grok')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+            <div class="flex items-center gap-2"><i class="ph-fill ph-magnifying-glass text-emerald-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">SerpAPI: <span id="api-serp-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('serpapi')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-800"><i class="ph-fill ph-cloud-arrow-up text-indigo-400 text-sm shrink-0"></i><span class="text-[11px] text-slate-400 flex-1">GAS: <span id="api-gas-status" class="font-semibold">...</span></span><button onclick="window.promptApiKey('gas')" class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors">設定</button></div>
+        </div>
+    </div>
+    <!-- 歷史備份/還原 -->
+    <div class="p-4 border-b border-slate-800">
+        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-3">簡報生成歷史</p>
+        <div class="flex gap-3">
+            <button onclick="exportPgHistory()" class="flex-1 flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl transition-colors">
+                <i class="ph-bold ph-download-simple"></i>匯出備份
+            </button>
+            <label class="flex-1 flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl transition-colors cursor-pointer">
+                <i class="ph-bold ph-upload-simple"></i>匯入還原
+                <input type="file" accept=".json" class="hidden" onchange="importPgHistory(event)">
+            </label>
+        </div>
+    </div>
+    <!-- 外觀 -->
+    <div class="p-4">
+        <p class="text-[11px] text-slate-500 font-bold uppercase tracking-wide mb-3">外觀</p>
+        <button onclick="togglePgTheme()" class="w-full flex items-center gap-3 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[13px] font-medium transition-colors">
+            <i id="pg-theme-icon-menu" class="ph-bold ph-moon"></i>
+            <span id="pg-theme-label">黑夜模式（與主程式同步）</span>
+        </button>
+    </div>
+</div>
+
 </body>
 </html>
