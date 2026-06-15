@@ -901,6 +901,17 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="flex items-center justify-between">
+                                    <div class="w-full">
+                                        <label class="block text-xs text-purple-400 font-bold flex items-center gap-1"><i class="ph-fill ph-image-square"></i> 圖片儲存（NOVA_Images）</label>
+                                        <p class="text-[10px] text-slate-500 mt-1">AI 生成的圖片皆儲存於 <code class="bg-slate-800 px-1 rounded">Documents/NOVA_Images/</code>（不佔用對話備份空間）。換新裝置時，「還原備份」只會還原對話文字；請另外用下方按鈕匯出/匯入圖片檔案，以完整保留聊天中的圖片。</p>
+                                        <input type="file" id="nova-images-import-input" accept="image/*" multiple class="hidden" onchange="window._novaImagesImport && window._novaImagesImport(event)">
+                                        <div class="flex gap-2 mt-2">
+                                            <button onclick="window._novaImagesExportAll && window._novaImagesExportAll()" class="px-2 py-1 text-[10px] bg-purple-700 hover:bg-purple-600 text-white rounded-md">📤 匯出所有圖片</button>
+                                            <button onclick="document.getElementById('nova-images-import-input').click()" class="px-2 py-1 text-[10px] bg-blue-700 hover:bg-blue-600 text-white rounded-md">📥 匯入圖片檔案</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -2389,6 +2400,191 @@ async function encodeMp3(audioBuffer) {
             return { load, run, getManifest, getLastError, getCount, saveSkill };
         })();
 
+        // ═══════════════════════════════════════════════════════════
+        // ★ NovaImageStore — 圖片檔案參考儲存架構
+        // 取代「base64 內嵌於訊息物件」的舊架構：
+        //   - AI 生成 / 使用者上傳的圖片立即寫入 Documents/NOVA_Images/{filename}
+        //   - 訊息物件只保留 { __fileRef: 'NOVA_Images/xxx.png', name, mimeType }
+        //   - IndexedDB / 備份 JSON / WAL delta 永遠不含大型 base64 字串
+        //     → JSON.stringify/parse 變得輕量、不再 OOM
+        // 顯示時透過 Capacitor.convertFileSrc() 取得可載入的 URL（零記憶體成本）
+        // ═══════════════════════════════════════════════════════════
+        window.NovaImageStore = (function() {
+            const IMG_DIR = 'NOVA_Images';
+            const _uriCache = new Map(); // relPath -> resolved webview URL
+
+            function _getCapFS() {
+                return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+            }
+
+            // 將 data URI（data:image/xxx;base64,AAAA...）寫入 Documents/NOVA_Images/{filename}
+            // 回傳 { __fileRef, name, mimeType } 供存入訊息物件；失敗回傳 null（呼叫端應 fallback 為原 base64）
+            async function save(dataUri, filename) {
+                const CapFS = _getCapFS();
+                if (!CapFS || typeof dataUri !== 'string' || !dataUri.startsWith('data:')) return null;
+                try {
+                    const mimeMatch = dataUri.match(/^data:([^;]+);base64,/);
+                    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+                    const b64 = dataUri.split(',')[1];
+                    await CapFS.writeFile({
+                        path: `${IMG_DIR}/${filename}`,
+                        data: b64,
+                        directory: 'DOCUMENTS',
+                        recursive: true
+                    });
+                    return { __fileRef: `${IMG_DIR}/${filename}`, name: filename, mimeType };
+                } catch(e) {
+                    console.warn('[NovaImageStore] 寫入失敗，將保留 base64:', e.message);
+                    return null;
+                }
+            }
+
+            // 解析 __fileRef → 可在 <img src> 使用的 URL（capacitor://... 或 http://...）
+            // 結果會快取，避免重複呼叫 getUri
+            async function resolveSrc(fileRef) {
+                if (!fileRef) return null;
+                if (_uriCache.has(fileRef)) return _uriCache.get(fileRef);
+                const CapFS = _getCapFS();
+                if (!CapFS || !window.Capacitor || typeof window.Capacitor.convertFileSrc !== 'function') return null;
+                try {
+                    const { uri } = await CapFS.getUri({ path: fileRef, directory: 'DOCUMENTS' });
+                    const webUrl = window.Capacitor.convertFileSrc(uri);
+                    _uriCache.set(fileRef, webUrl);
+                    return webUrl;
+                } catch(e) {
+                    _uriCache.set(fileRef, null); // 檔案不存在（例如還原備份但圖片未隨附）
+                    return null;
+                }
+            }
+
+            // 檢查檔案是否存在（不讀取內容，輕量）
+            async function exists(fileRef) {
+                const CapFS = _getCapFS();
+                if (!CapFS || !fileRef) return false;
+                try { await CapFS.stat({ path: fileRef, directory: 'DOCUMENTS' }); return true; }
+                catch(e) { return false; }
+            }
+
+            // 讀取單張圖片為 base64 data URI（僅在「下載/分享」等需要實際 bytes 時使用，
+            // 單張圖片通常 <10MB，安全）
+            async function readAsDataUri(fileRef, mimeType) {
+                const CapFS = _getCapFS();
+                if (!CapFS) return null;
+                try {
+                    const { data } = await CapFS.readFile({ path: fileRef, directory: 'DOCUMENTS' });
+                    return `data:${mimeType || 'image/png'};base64,${data}`;
+                } catch(e) { return null; }
+            }
+
+            // 刪除單張圖片檔案
+            async function remove(fileRef) {
+                const CapFS = _getCapFS();
+                if (!CapFS || !fileRef) return;
+                try { await CapFS.deleteFile({ path: fileRef, directory: 'DOCUMENTS' }); } catch(e) {}
+                _uriCache.delete(fileRef);
+            }
+
+            // 匯出：用 Share 把多張圖片檔案一次分享出去（跨裝置搬移用）
+            async function exportImages(fileRefs) {
+                const CapFS = _getCapFS();
+                const CapShare = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+                if (!CapFS || !CapShare || fileRefs.length === 0) return false;
+                const uris = [];
+                for (const ref of fileRefs) {
+                    try {
+                        const { uri } = await CapFS.getUri({ path: ref, directory: 'DOCUMENTS' });
+                        uris.push(uri);
+                    } catch(e) {}
+                }
+                if (uris.length === 0) return false;
+                try {
+                    await CapShare.share({ title: 'NOVA 圖片匯出', files: uris, dialogTitle: '選擇分享/儲存方式' });
+                    return true;
+                } catch(e) { return false; }
+            }
+
+            // 匯入：使用者透過多檔選擇器選取圖片檔，寫入 Documents/NOVA_Images/
+            // 檔名需與訊息中的 __fileRef 一致才能對應，否則僅補檔不會自動關聯
+            async function importImages(fileList) {
+                const CapFS = _getCapFS();
+                if (!CapFS) return 0;
+                let count = 0;
+                for (const file of fileList) {
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const bytes = new Uint8Array(arrayBuffer);
+                        let binary = '';
+                        const chunkSize = 8192;
+                        for (let i = 0; i < bytes.length; i += chunkSize) {
+                            binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+                        }
+                        const b64 = btoa(binary);
+                        await CapFS.writeFile({
+                            path: `${IMG_DIR}/${file.name}`,
+                            data: b64,
+                            directory: 'DOCUMENTS',
+                            recursive: true
+                        });
+                        _uriCache.delete(`${IMG_DIR}/${file.name}`); // 清快取，下次重新 resolve
+                        count++;
+                    } catch(e) {
+                        console.warn(`[NovaImageStore] 匯入 ${file.name} 失敗:`, e.message);
+                    }
+                }
+                return count;
+            }
+
+            return { IMG_DIR, save, resolveSrc, exists, readAsDataUri, remove, exportImages, importImages };
+        })();
+
+        // ★ 背景遷移：掃描 appState.messages 中殘留的舊格式 base64 圖片（f.data 為
+        //   data:image/... 開頭），逐一寫入 Documents/NOVA_Images/ 並改為 __fileRef，
+        //   降低 IndexedDB / WAL / 備份的記憶體負擔。
+        //   分批處理（每批5則）並 yield，不阻塞 UI；完成後重新渲染一次。
+        window._novaMigrateLegacyImages = async function() {
+            const CapFS = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+            if (!CapFS || typeof window.NovaImageStore !== 'object') return;
+
+            const targets = [];
+            for (const msg of appState.messages) {
+                const filesArr = Array.isArray(msg.files) ? msg.files : (msg.file ? [msg.file] : []);
+                for (const f of filesArr) {
+                    if (f && f.category === 'image' && typeof f.data === 'string' && f.data.startsWith('data:image')) {
+                        targets.push({ msg, f });
+                    }
+                }
+            }
+            if (targets.length === 0) return;
+
+            console.log(`[NovaImageStore] 偵測到 ${targets.length} 張舊格式圖片，開始背景遷移...`);
+            let migrated = 0;
+            for (let i = 0; i < targets.length; i++) {
+                const { msg, f } = targets[i];
+                try {
+                    const filename = f.name || `NOVA_IMG_legacy_${msg.id}_${i}.png`;
+                    const saved = await window.NovaImageStore.save(f.data, filename);
+                    if (saved) {
+                        delete f.data;
+                        f.__fileRef = saved.__fileRef;
+                        f.mimeType = saved.mimeType;
+                        f.name = filename;
+                        migrated++;
+                    }
+                } catch(e) {
+                    console.warn('[NovaImageStore] 遷移失敗，保留原狀:', e.message);
+                }
+                // 每5張寫回一次該訊息並 yield，避免長時間佔用主執行緒
+                if (i % 5 === 4 || i === targets.length - 1) {
+                    saveToDB('messages', msg);
+                    await new Promise(r => setTimeout(r, 10));
+                }
+            }
+            if (migrated > 0) {
+                console.log(`[NovaImageStore] 已遷移 ${migrated} 張圖片至 Documents/NOVA_Images/`);
+                if (typeof renderMessages === 'function') renderMessages();
+            }
+        };
+
 // ── NovaSkills 設定頁渲染 ──────────────────────────────
         function _renderNovaSkillsList() {
             const el = document.getElementById('nova-skills-list');
@@ -2479,6 +2675,40 @@ async function encodeMp3(audioBuffer) {
                 _renderNovaSkillsList();
             }
             showToast('🗑️ 已清空本地技能');
+        };
+
+        // ★ 匯出所有聊天圖片：收集所有訊息中的 __fileRef，透過 Share 一次分享
+        //   （Android 分享選單可選擇「儲存到雲端/傳送給自己」等方式跨裝置搬移）
+        window._novaImagesExportAll = async function() {
+            if (typeof window.NovaImageStore !== 'object') return;
+            const refs = new Set();
+            for (const msg of appState.messages) {
+                const filesArr = Array.isArray(msg.files) ? msg.files : (msg.file ? [msg.file] : []);
+                for (const f of filesArr) {
+                    if (f && f.category === 'image' && f.__fileRef) refs.add(f.__fileRef);
+                }
+            }
+            if (refs.size === 0) { showToast('目前沒有可匯出的圖片'); return; }
+            showToast(`📤 正在準備 ${refs.size} 張圖片...`);
+            const ok = await window.NovaImageStore.exportImages([...refs]);
+            if (!ok) showToast('❌ 匯出失敗或裝置不支援分享功能');
+        };
+
+        // ★ 匯入圖片檔案：使用者選取先前匯出的圖片檔，寫回 Documents/NOVA_Images/
+        //   檔名須與訊息中的 __fileRef 一致（匯出時保留原檔名，故通常吻合）
+        window._novaImagesImport = async function(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            if (typeof window.NovaImageStore !== 'object') return;
+            showToast(`📥 正在匯入 ${files.length} 張圖片...`);
+            const count = await window.NovaImageStore.importImages(files);
+            e.target.value = '';
+            showToast(`✅ 已匯入 ${count}/${files.length} 張圖片`);
+            if (typeof renderMessages === 'function') {
+                // 重置已解析快取，讓畫面重新嘗試載入剛匯入的圖片
+                document.querySelectorAll('.nova-fileref-wrap[data-resolved]').forEach(el => delete el.dataset.resolved);
+                renderMessages();
+            }
         };
 
 // --- 本地即時 WAL（Write-Ahead Log）備份引擎 ---
@@ -3034,7 +3264,6 @@ html += '</tr>';
 return html;
             });        
         // ★ NOVA CANVAS：攔截程式碼區塊，轉換為可執行的 Canvas 卡片
-<<<<<<< HEAD
         const extractedCodes = [];
         let _cm;
         // 同時支援有換行和無換行兩種格式，及各種可能的空白字元
@@ -3051,26 +3280,11 @@ return html;
             // 額外偵錯：看前100字元是否有backtick
             const _bt = tempText.indexOf('\u0060\u0060\u0060');
             if (_bt !== -1) console.warn('[NOVA Canvas] 有 ``` 但沒匹配到，附近文字：', JSON.stringify(tempText.slice(_bt, _bt+30)));
-=======
-        const codeBlockRegex = /```(html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)\n?([\s\S]*?)```/gi;
-        const extractedCodes = [];
-        let _cm;
-        const _tempForCanvas = tempText;
-        const _tmpRegex = new RegExp('```(html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)\\n?([\\s\\S]*?)```', 'gi');
-        while ((_cm = _tmpRegex.exec(_tempForCanvas)) !== null) {
-            const _lang = _cm[1], _code = _cm[2].replace(/^\n|\n$/g,'');
-            let _enc; try { _enc = btoa(unescape(encodeURIComponent(_code))); } catch(e) { _enc = ''; }
-            extractedCodes.push({ lang:_lang, code:_code, enc:_enc, lines:_code.split('\n').length, label:_lang.toUpperCase() });
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
         }
 
         if (extractedCodes.length > 0) {
             let _ci = 0;
-<<<<<<< HEAD
             safe = safe.replace(/```(?:html|css|javascript|js|python|py|typescript|ts|react|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)[ \t]*\r?\n?[\s\S]*?```/gi, function() {
-=======
-            safe = safe.replace(/```(?:html|css|javascript|js|python|py|typescript|ts|jsx|tsx|vue|svelte|php|ruby|go|rust|java|kotlin|swift|c|cpp|sql)\n?[\s\S]*?```/gi, function() {
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                 const ec = extractedCodes[_ci] || extractedCodes[0]; _ci++;
                 if (!ec) return '';
                 window._novaCanvasLastCode = ec.code;
@@ -3093,7 +3307,6 @@ return html;
         });
 
         let finalHtml = safe.replace(/\n/g, '<br>');
-<<<<<<< HEAD
 
         // ★ NOVA: 還原 sendPrompt 佔位符為真實可點擊按鈕
         if (_sendPromptBtns.length > 0) {
@@ -3113,8 +3326,6 @@ return html;
             });
         }
 
-=======
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
         if (pptButtonHtml) finalHtml += pptButtonHtml;
         if (excelButtonHtml) finalHtml += excelButtonHtml;
         if (dataUriButtonsHtml) finalHtml += dataUriButtonsHtml;
@@ -5073,6 +5284,10 @@ msg.files : (msg.file ? [msg.file] : []);
             appState.todos.unshift(newTodo);
             saveToDB('todos', newTodo);
             scheduleEmergencyBackup();
+            // ★ 修復：新增行程後立即刷新行程列表 + 關閉新增視窗
+            //   （原本缺少這兩行，導致新行程要重啟 App 才會顯示）
+            renderTodos();
+            closeAddTodoModal();
             // ✅ 同步到手機行事曆（有設定提醒時間就同步，不依賴 syncTodos checkbox）
             if (alertTime && typeof CalEngine !== 'undefined') {
                 const calOk = await CalEngine.addTodoToCalendar(newTodo);
@@ -6026,8 +6241,13 @@ return; }
                 
                 // 導出檔案
                 let exportFilename = (filename || excelData.filename || "NOVA_Export") + ".xlsx";
-                XLSX.writeFile(wb, exportFilename);
-                showToast("✅ EXCEL 下載中...");
+                // ★ 同 PPT 問題：XLSX.writeFile() 內部用 <a download> + blob，
+                //   在 Android Capacitor WebView 中 download 屬性被忽略，檔案無法產出。
+                //   改用 XLSX.write(wb, {type:'base64'}) + downloadDataUriFile()
+                const xlsxBase64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+                const xlsxDataUri = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${xlsxBase64}`;
+                downloadDataUriFile(xlsxDataUri, exportFilename);
+                showToast("✅ EXCEL 已產生！");
             } catch (e) {
                 console.error("Excel Generation Error:", e);
                 alert("❌ EXCEL 產生失敗: " + e.message);
@@ -6248,8 +6468,15 @@ return; }
 
                 let filename = (pptData.title || "NOVA_Presentation").replace(/[\\/:*?"<>|]/g, '_') + ".pptx";
                 showToast(`📦 所有配圖完成！正在封裝 ${totalSlides + 1} 頁投影片為 .pptx…`);
-                await pptx.writeFile({ fileName: filename });
-                showToast("✅ AI 圖文簡報下載中...");
+                // ★ 不使用 pptx.writeFile()：其內部用 <a download> + blob URL，
+                //   在 Android Capacitor WebView 中 download 屬性被忽略，檔案無法產出。
+                //   改用 pptx.write({outputType:'base64'}) 取得純 base64 內容，
+                //   交給既有的 downloadDataUriFile()（已處理 Capacitor Filesystem +
+                //   Share 流程，與圖片下載共用同一套已驗證可用的機制）。
+                const pptxBase64 = await pptx.write({ outputType: 'base64' });
+                const pptxDataUri = `data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,${pptxBase64}`;
+                await downloadDataUriFile(pptxDataUri, filename);
+                showToast("✅ AI 圖文簡報已產生！");
             } catch (e) {
                 console.error("PPT Generation Error:", e);
                 alert("❌ PPT 產生失敗: " + e.message);
@@ -6821,6 +7048,23 @@ msg.text === "請詳細描述畫面中的內容。" || msg.text === `[夾帶檔�
                 let filesToRender = msg.files && msg.files.length > 0 ? msg.files : (msg.file ? [msg.file] : []);
                 if (filesToRender.length > 0 && displayMediaHTML) {
                     mediaHTML = `<div class="flex flex-wrap gap-3 mb-3">` + filesToRender.map(f => {
+                        // ★ 新架構：__fileRef 圖片（檔案存於 Documents/NOVA_Images/，不含 base64）
+                        //   先渲染 placeholder，渲染後由 _resolveFileRefImages() 非同步解析真實 src
+                        if (f.category === 'image' && f.__fileRef) {
+                            const fname = escapeHtml(f.name || 'image.png');
+                            const _refAttr = escapeHtml(f.__fileRef);
+                            return `<div class="relative group w-full max-w-xs md:max-w-sm cursor-pointer nova-fileref-wrap"
+                                data-fileref="${_refAttr}" data-filename="${fname}"
+                                title="點擊放大 / 長按下載">
+                                <div class="rounded-xl border border-slate-700/50 shadow-lg w-full bg-slate-900/60 flex items-center justify-center" style="min-height:160px;max-height:360px;">
+                                    <i class="ph-bold ph-image text-slate-600 text-3xl animate-pulse"></i>
+                                </div>
+                                <div class="absolute inset-0 rounded-xl flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none">
+                                    <span class="text-white text-[10px] font-bold drop-shadow truncate max-w-[60%]">${fname}</span>
+                                    <span class="text-white/80 text-[10px] flex items-center gap-1"><i class="ph-bold ph-magnifying-glass-plus"></i>點擊放大</span>
+                                </div>
+                            </div>`;
+                        }
                         if (f.category === 'image' && f.data) {
                             const fname = escapeHtml(f.name || 'image.png');
                             // ★ 存入暫存 Map，onclick 只傳 key，避免 base64 大字串塞入 HTML attribute 被截斷
@@ -6897,7 +7141,66 @@ msg.text === "請詳細描述畫面中的內容。" || msg.text === `[夾帶檔�
                     </div></div>`; 
             }).join(''); 
             container.scrollTop = container.scrollHeight;
+            // ★ 非同步解析 __fileRef 圖片的真實 src（不阻塞渲染）
+            if (typeof _resolveFileRefImages === 'function') _resolveFileRefImages();
         }
+
+        // ★ 解析所有 [data-fileref] 佔位元素，從 NovaImageStore 取得可載入的 URL
+        //   並替換為實際 <img>；找不到檔案（例如還原備份但圖片未隨附）則顯示提示
+        async function _resolveFileRefImages() {
+            const wraps = document.querySelectorAll('.nova-fileref-wrap[data-fileref]');
+            for (const wrap of wraps) {
+                const fileRef = wrap.getAttribute('data-fileref');
+                const fname = wrap.getAttribute('data-filename') || 'image.png';
+                if (wrap.dataset.resolved === '1') continue;
+                wrap.dataset.resolved = '1';
+                const src = await window.NovaImageStore.resolveSrc(fileRef);
+                const placeholder = wrap.querySelector('div');
+                if (src) {
+                    const img = document.createElement('img');
+                    img.src = src;
+                    img.className = 'rounded-xl border border-slate-700/50 shadow-lg w-full object-contain bg-slate-900 transition-transform active:scale-95 hover:brightness-90';
+                    img.style.maxHeight = '360px';
+                    if (placeholder) wrap.replaceChild(img, placeholder);
+
+                    wrap.onclick = () => { if (typeof openImgPreview === 'function') openImgPreview(src, fname); };
+                    wrap.addEventListener('touchstart', () => {
+                        window._lpTimer = setTimeout(() => { _novaFileRefDl(fileRef, fname); window._lpFired = true; }, 600);
+                        window._lpFired = false;
+                    });
+                    wrap.addEventListener('touchend', () => clearTimeout(window._lpTimer));
+                    wrap.addEventListener('touchmove', () => clearTimeout(window._lpTimer));
+
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'absolute top-2 right-2 bg-blue-600/90 hover:bg-blue-500 text-white p-1.5 rounded-lg shadow-lg text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 backdrop-blur-md pointer-events-auto';
+                    dlBtn.title = '已儲存於 Documents/NOVA_Images/';
+                    dlBtn.innerHTML = '<i class="ph-bold ph-check-circle"></i>';
+                    dlBtn.onclick = (e) => { e.stopPropagation(); _novaFileRefDl(fileRef, fname); };
+                    wrap.appendChild(dlBtn);
+                } else {
+                    // 檔案不存在（可能是還原備份後圖片未隨附）
+                    if (placeholder) {
+                        placeholder.innerHTML = '<div class="flex flex-col items-center gap-1 text-slate-500 text-xs p-4"><i class="ph-bold ph-image-broken text-2xl"></i><span>圖片未隨備份還原</span></div>';
+                    }
+                    wrap.title = `找不到圖片檔案：${fileRef}（可在設定頁「匯入圖片」補上）`;
+                }
+            }
+        }
+
+        // 長按 __fileRef 圖片：檔案已存在於 Documents/NOVA_Images/，提供分享/再次確認路徑
+        window._novaFileRefDl = async function(fileRef, fname) {
+            const CapShare = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+            const CapFS = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+            if (CapFS && CapShare) {
+                try {
+                    const { uri } = await CapFS.getUri({ path: fileRef, directory: 'DOCUMENTS' });
+                    await CapShare.share({ title: fname, files: [uri], dialogTitle: '分享/儲存圖片' });
+                    return;
+                } catch(e) {}
+            }
+            showToast(`✅ 圖片已儲存於 Documents/${fileRef}`);
+        };
+
 
         window.togglePinSession = function(sid, e) {
             e.stopPropagation();
@@ -11128,6 +11431,22 @@ if (appState.pendingAnalyzeContextId) {
             }
         }
 
+        // ★ 提升為全域函式：handleSendMessage（通用意圖分類器）與
+        //   fetchAIResponse 都需要呼叫，原本定義在 fetchAIResponse 內部
+        //   導致跨函式呼叫時 ReferenceError: fetchWithTimeout is not defined
+        const fetchWithTimeout = async (url, fetchOpts, timeout = 300000) => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...fetchOpts, signal: controller.signal });
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                throw new Error(error.name === 'AbortError' ? '連線逾時，檔案可能過大或處理過久 (600s)' : error.message);
+            }
+        };
+
         async function fetchAIResponse(userText, model, options = {}) {
             // ★ 從 handleSendMessage 傳入的通用意圖分類結果（_intentHints），
             //   若未提供（例如二輪 skill_call follow-up 呼叫）則用安全預設值
@@ -11147,19 +11466,6 @@ if (appState.pendingAnalyzeContextId) {
                 userText += antiHallucinationPrompt;
             }
         }
-
-        const fetchWithTimeout = async (url, fetchOpts, timeout = 300000) => {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), timeout);
-            try {
-                const response = await fetch(url, { ...fetchOpts, signal: controller.signal });
-                clearTimeout(id);
-                return response;
-            } catch (error) {
-                clearTimeout(id);
-                throw new Error(error.name === 'AbortError' ? '連線逾時，檔案可能過大或處理過久 (600s)' : error.message);
-            }
-        };
 
             try {
                 const key = appState.keys[model]; if(!key) throw new Error(`未填寫 ${MODEL_CONFIG[model]?.name || model} API Key`);
@@ -11323,7 +11629,12 @@ if (appState.pendingAnalyzeContextId) {
                         
                         const base64Image = data.predictions[0].bytesBase64Encoded;
                         const _imgTs = (() => { const _n=new Date(),_p=n=>String(n).padStart(2,'0'); return `${_n.getFullYear()}${_p(_n.getMonth()+1)}${_p(_n.getDate())}_${_p(_n.getHours())}${_p(_n.getMinutes())}${_p(_n.getSeconds())}`; })();
-                        const fileObj = { category: 'image', data: `data:image/png;base64,${base64Image}`, name: `NOVA_IMG_${_imgTs}.png` };
+                        const _imagenFilename = `NOVA_IMG_${_imgTs}_${Math.random().toString(36).slice(2,6)}.png`;
+                        const _imagenDataUri = `data:image/png;base64,${base64Image}`;
+                        const _savedImagen = await window.NovaImageStore.save(_imagenDataUri, _imagenFilename);
+                        const fileObj = _savedImagen
+                            ? { category: 'image', __fileRef: _savedImagen.__fileRef, mimeType: _savedImagen.mimeType, name: _imagenFilename }
+                            : { category: 'image', data: _imagenDataUri, name: _imagenFilename };
                         let resTxt = `✨ 圖片生成成功！已為您附在下方。`;
                         if(isAutoRouted) resTxt += `\n\n*(系統提示：已為您動態調配至 **${selectedModelName}** 執行繪圖任務)*`;
                         return { text: resTxt, sources: [], file: fileObj };
@@ -11462,11 +11773,14 @@ if (appState.pendingAnalyzeContextId) {
                             const _imgExt = (imgPart.inlineData.mimeType || '').includes('jpeg') ? 'jpg'
                                           : (imgPart.inlineData.mimeType || '').includes('webp') ? 'webp'
                                           : 'png';
-                            responseImageFile = {
-                                category: 'image',
-                                data: `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`,
-                                name: `NOVA_IMG_${_ts}_${_sidPart}_${_rand}.${_imgExt}`
-                            };
+                            const _imgFilename = `NOVA_IMG_${_ts}_${_sidPart}_${_rand}.${_imgExt}`;
+                            const _imgDataUri = `data:${imgPart.inlineData.mimeType};base64,${imgPart.inlineData.data}`;
+                            // ★ 架構重構：立即寫入 Documents/NOVA_Images/，訊息只存 __fileRef，
+                            //   避免 base64 進入 appState.messages / IndexedDB / 備份 JSON
+                            const _saved = await window.NovaImageStore.save(_imgDataUri, _imgFilename);
+                            responseImageFile = _saved
+                                ? { category: 'image', __fileRef: _saved.__fileRef, mimeType: _saved.mimeType, name: _imgFilename }
+                                : { category: 'image', data: _imgDataUri, name: _imgFilename }; // 寫入失敗 fallback 舊行為
                         }
                     }
 
@@ -11609,7 +11923,16 @@ if (appState.pendingAnalyzeContextId) {
                                         ? `data:image/png;base64,${grokData.data[0].b64_json}` 
                                         : grokData.data[0].url;
                                     const _gbTs = (() => { const _n=new Date(),_p=n=>String(n).padStart(2,'0'); return `${_n.getFullYear()}${_p(_n.getMonth()+1)}${_p(_n.getDate())}_${_p(_n.getHours())}${_p(_n.getMinutes())}${_p(_n.getSeconds())}`; })();
-                                    responseImageFile = { category: 'image', data: imgData, name: `NOVA_IMG_${_gbTs}.png` };
+                                    const _grokImgName = `NOVA_IMG_${_gbTs}_${Math.random().toString(36).slice(2,6)}.png`;
+                                    if (imgData.startsWith('data:')) {
+                                        const _savedGrok = await window.NovaImageStore.save(imgData, _grokImgName);
+                                        responseImageFile = _savedGrok
+                                            ? { category: 'image', __fileRef: _savedGrok.__fileRef, mimeType: _savedGrok.mimeType, name: _grokImgName }
+                                            : { category: 'image', data: imgData, name: _grokImgName };
+                                    } else {
+                                        // Grok 回傳外部 URL（非 base64），保留原行為
+                                        responseImageFile = { category: 'image', data: imgData, name: _grokImgName };
+                                    }
                                     outputText = `✨ 圖片生成成功！已為您附在下方。\n\n*(備援提示：Gemini 圖片模型本次未回傳圖片，已自動切換至 **Grok Imagine Image Pro** 備援生成)*`;
                                 }
                             }
@@ -11705,7 +12028,13 @@ if (appState.pendingAnalyzeContextId) {
                         if (data.data && data.data[0]) {
                             if (data.data[0].b64_json) {
                                 const _gkTs = (() => { const _n=new Date(),_p=n=>String(n).padStart(2,'0'); return `${_n.getFullYear()}${_p(_n.getMonth()+1)}${_p(_n.getDate())}_${_p(_n.getHours())}${_p(_n.getMinutes())}${_p(_n.getSeconds())}`; })();
-                                return { text: successTxt, sources: [], file: { category: 'image', data: `data:image/png;base64,${data.data[0].b64_json}`, name: `NOVA_IMG_${_gkTs}.png` } };
+                                const _gkFilename = `NOVA_IMG_${_gkTs}_${Math.random().toString(36).slice(2,6)}.png`;
+                                const _gkDataUri = `data:image/png;base64,${data.data[0].b64_json}`;
+                                const _savedGk = await window.NovaImageStore.save(_gkDataUri, _gkFilename);
+                                const _gkFile = _savedGk
+                                    ? { category: 'image', __fileRef: _savedGk.__fileRef, mimeType: _savedGk.mimeType, name: _gkFilename }
+                                    : { category: 'image', data: _gkDataUri, name: _gkFilename };
+                                return { text: successTxt, sources: [], file: _gkFile };
                             } else if (data.data[0].url) {
                                 const _gkTs2 = (() => { const _n=new Date(),_p=n=>String(n).padStart(2,'0'); return `${_n.getFullYear()}${_p(_n.getMonth()+1)}${_p(_n.getDate())}_${_p(_n.getHours())}${_p(_n.getMinutes())}${_p(_n.getSeconds())}`; })();
                                 return { text: successTxt, sources: [], file: { category: 'image', data: data.data[0].url, name: `NOVA_IMG_${_gkTs2}.png` } };
@@ -12283,6 +12612,12 @@ ${evts.map(e=>`• ${e.start.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'
             renderAll();
             // ── 啟動完成後執行初始緊急備份（確保有最新快照，以防手機下次清除 IndexedDB）
             scheduleEmergencyBackup();
+
+            // ★ 背景遷移：將舊格式（base64 內嵌於訊息）的圖片轉為 __fileRef 架構
+            //   不阻塞啟動流程，分批處理並 yield，避免卡頓
+            if (typeof window._novaMigrateLegacyImages === 'function') {
+                window._novaMigrateLegacyImages();
+            }
             
             const safeSet = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
             safeSet('key-gemini', appState.keys.gemini); safeSet('key-groq', appState.keys.groq); safeSet('key-cohere', appState.keys.cohere); safeSet('key-openai', appState.keys.openai); safeSet('key-grok', appState.keys.grok); safeSet('key-serpapi', appState.keys.serpapi); safeSet('key-aws-ak', appState.keys.aws_ak); safeSet('key-aws-sk', appState.keys.aws_sk); safeSet('key-aws-region', appState.keys.aws_region); safeSet('key-doc-url', appState.docMonitorUrl); safeSet('key-drive-url', appState.driveUrl); safeSet('key-gmaps', appState.keys.gmaps);
@@ -12700,11 +13035,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
 
                 // ── HTML: 直接渲染 ─────────────────────────────────
                 if (lang === 'html') {
-<<<<<<< HEAD
-=======
-                    // ★ 若程式碼本身沒有宣告 <!DOCTYPE 或 <html，代表是片段，
-                    //   注入深色底色基底避免白底白字問題
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                     var _hasFullDoc = /<!DOCTYPE|<html/i.test(_code);
                     if (!_hasFullDoc) {
                         doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
@@ -12723,7 +13053,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                         + '<div class="preview-box">範例元素</div>'
                         + '</body></html>';
 
-<<<<<<< HEAD
                 // ── JSX / React: Babel 轉譯 + React 18 渲染（本地 vendor 優先，CDN 備援）───────
                 } else if (['jsx','tsx','react'].indexOf(lang) !== -1) {
                     var reactCode = _code;
@@ -12784,16 +13113,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                         + '<meta name="viewport" content="width=device-width,initial-scale=1">'
                         + _reactScripts
                         + _tailwind
-=======
-                // ── JSX / React: Babel 轉譯 + React 18 渲染 ───────
-                } else if (['jsx','tsx','react'].indexOf(lang) !== -1) {
-                    var reactCode = _code;
-                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
-                        + '<meta name="viewport" content="width=device-width,initial-scale=1">'
-                        + '<script src="https://unpkg.com/react@18/umd/react.development.js"><\/script>'
-                        + '<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>'
-                        + '<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>'
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                         + '<style>*{box-sizing:border-box}body{margin:0;font-family:sans-serif;background:#fff}'
                         + '#root{min-height:100vh}.err-banner{background:#fef2f2;color:#dc2626;padding:12px 16px;'
                         + 'font-family:monospace;font-size:12px;white-space:pre-wrap;border-left:3px solid #dc2626;margin:12px}'
@@ -12804,7 +13123,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                         + reactCode.replace(/<\/script>/gi, '<\\/script>')
                         + '\n// Auto-render: find default export or last defined component\n'
                         + 'const _root = ReactDOM.createRoot(document.getElementById("root"));\n'
-<<<<<<< HEAD
                         + '// 1. 優先：module.exports.default（Babel 轉譯 export default 的產物）\n'
                         + 'const _modExp = typeof module!=="undefined"&&module.exports ? module.exports : null;\n'
                         + 'const _defExp = _modExp && (_modExp["default"]||_modExp.default);\n'
@@ -12815,18 +13133,11 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                         + 'if(!_comp){for(const _g of _globals){try{const _v=eval(_g);if(_isPascal(_v)){_comp=_v;break;}}catch(e){}}}\n'
                         + '// 3. 最後手段：掃描 window 上所有 PascalCase 函式（使用者自定義元件名稱）\n'
                         + 'if(!_comp){for(const _k of Object.keys(window)){if(/^[A-Z][A-Za-z0-9]+$/.test(_k)&&typeof window[_k]==="function"&&String(window[_k]).includes("return")){_comp=window[_k];break;}}}\n'
-=======
-                        + 'const _exports = typeof exports !== "undefined" ? exports : {};\n'
-                        + 'const _comp = typeof App !== "undefined" ? App\n'
-                        + '  : typeof default_1 !== "undefined" ? default_1\n'
-                        + '  : typeof Component !== "undefined" ? Component : null;\n'
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                         + 'if (_comp) { _root.render(React.createElement(_comp)); }\n'
                         + 'else { document.getElementById("root").innerHTML = "<div style=\\"padding:20px;color:#64748b;\\">⚠️ 找不到 React 元件（請確保有 App 或預設匯出）</div>"; }\n'
                         + '} catch(e) {'
                         + '  const b=document.createElement("div");b.className="err-banner";b.textContent="❌ "+e.message;document.body.prepend(b);'
                         + '}'
-<<<<<<< HEAD
                         + 'setTimeout(function(){'
                         + '  var _r=document.getElementById("root");'
                         + '  if(!_r) return;'
@@ -12850,8 +13161,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                         + '    document.getElementById("_nb").onclick=function(){window.parent.postMessage({type:"nova-canvas-rerun-as-html"},"*");};'
                         + '  }'
                         + '},800);'
-=======
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                         + '<\/script></body></html>';
 
                 // ── JavaScript: DOM 互動 + console 攔截 ───────────
@@ -12890,7 +13199,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                             + '</body></html>';
                     }
 
-<<<<<<< HEAD
                 // ── Python: 三引擎自動判斷 ────────────────────────
                 } else if (['python','py'].indexOf(lang) !== -1) {
                     var hasInput      = /\binput\s*\(/.test(_code);
@@ -13184,82 +13492,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                             + 'var s1=document.createElement("script");s1.src="' + SKULPT_CORE + '";s1.onload=loadStd;s1.onerror=function(){clearTimeout(_lt);setErr("無法載入 Skulpt");ap("❌ 無法連線至 CDN，請確認網路連線後重試","err");};document.head.appendChild(s1);'
                             + '<\/script></body></html>';
                     } // end engine selection
-=======
-                // ── Python: Pyodide + matplotlib 支援 ────────────
-                } else if (['python','py'].indexOf(lang) !== -1) {
-                    var hasInput = /\binput\s*\(/.test(_code);
-                    var hasMatplotlib = /matplotlib|plt\.|pyplot/.test(_code);
-                    // input() 透過 py.globals.set 注入，不需要在原始碼替換
-                    var processedCode = _code;
-                    // 若有 matplotlib，加入轉 base64 圖片的 patch
-                    if (hasMatplotlib) {
-                        processedCode = 'import io, base64\n'
-                            + 'import matplotlib\nmatplotlib.use("Agg")\n'
-                            + processedCode
-                            + '\n\nimport matplotlib.pyplot as _plt\n'
-                            + '_buf = io.BytesIO()\n'
-                            + '_plt.savefig(_buf, format="png", bbox_inches="tight", dpi=120)\n'
-                            + '_buf.seek(0)\n'
-                            + '_b64 = base64.b64encode(_buf.read()).decode()\n'
-                            + 'from js import document as _doc\n'
-                            + '_img = _doc.createElement("img")\n'
-                            + '_img.src = "data:image/png;base64," + _b64\n'
-                            + '_img.style.maxWidth = "100%"\n'
-                            + '_doc.getElementById("output").appendChild(_img)\n';
-                    }
-                    var safeCode = processedCode.replace(/\\/g,'\\\\').replace(/`/g,'\\`');
-                    var pkgs = hasMatplotlib ? '"matplotlib","numpy"' : '""';
-                    doc = '<!DOCTYPE html><html><head><meta charset="utf-8">'
-                        + '<style>*{box-sizing:border-box;margin:0;padding:0}'
-                        + 'body{background:#0d1117;color:#e6edf3;font-family:monospace;font-size:13px}'
-                        + '#status{padding:10px 16px;background:#0f172a;border-bottom:1px solid #1e293b;'
-                        + 'color:#38bdf8;display:flex;align-items:center;gap:8px;font-size:12px;position:sticky;top:0}'
-                        + '#output{padding:16px;white-space:pre-wrap;line-height:1.8;word-break:break-all}'
-                        + '.err{color:#f87171;background:#1c0a0a;padding:8px 12px;border-radius:8px;border-left:3px solid #f87171;margin:4px 0}'
-                        + 'img{border-radius:8px;margin-top:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}'
-                        + (hasInput ? '#hint{padding:8px 16px;color:#fbbf24;font-size:11px;background:#1c1500;border-top:1px solid #292000}' : '')
-                        + '</style></head><body>'
-                        + '<div id="status"><span id="sp">⏳</span><span id="st">載入 Python (Pyodide)...</span></div>'
-                        + (hasInput ? '<div id="hint">⚠️ 此程式使用 input()，將以對話框輸入</div>' : '')
-                        + '<div id="output"><div id="py-init-msg" style="color:#475569">⏳ 正在載入 Python 環境（首次需時約 10-30 秒）...</div></div>'
-                        + '<script>'
-                        + 'var pyCode=`' + safeCode + '`;'
-                        + 'var out=document.getElementById("output");'
-                        + 'var st=document.getElementById("st");'
-                        + 'var sp=document.getElementById("sp");'
-                        + 'function clr(){out.innerHTML="";}' 
-                        + 'function ap(t,cls){clr();var d=document.createElement("div");if(cls)d.className=cls;d.textContent=t;out.appendChild(d);}'
-                        + 'function getMsg(e){return e&&e.message?e.message:e&&e.toString&&e.toString()!=="[object Object]"?e.toString():String(e);}'
-                        + 'var s=document.createElement("script");'
-                        + 's.src="https://cdn.jsdelivr.net/pyodide/v0.27.5/full/pyodide.js";'
-                        + 's.onload=function(){'
-                        + '  st.textContent="初始化...";'
-                        + '  loadPyodide({'
-                        + '    indexURL:"https://cdn.jsdelivr.net/pyodide/v0.27.5/full/",'
-                        + '    stdout:function(t){clr();var d=document.createElement("div");d.textContent=t;out.appendChild(d);},'
-                        + '    stderr:function(t){clr();var d=document.createElement("div");d.className="err";d.textContent=t;out.appendChild(d);},'
-                        + '    stdin:function(){return "";}' 
-                        + '  }).then(async function(py){'
-                        + '    sp.textContent="▶";'
-                        + (hasMatplotlib ? 'st.textContent="載入 matplotlib...";await py.loadPackage(["matplotlib","numpy"]);' : '')
-                        + '    st.textContent="執行中...";'
-                        + '    // ★ 把 JS 的 prompt() 注入到 Python 命名空間'
-                        + '    py.globals.set("input", function(msg) {'
-                        + '      return window.prompt(msg || "") || "";'
-                        + '    });'
-                        + '    try{'
-                        + '      var _hasOutput=false;'
-                        + '      var _origStdout=py.runPython("import sys;sys.stdout");'
-                        + '      await py.runPythonAsync(pyCode);'
-                        + '      sp.textContent="✅";st.textContent="執行完成";'
-                        + '      if(!out.children.length){ap("（執行完畢，無輸出）");}' 
-                        + '    }catch(ex){sp.textContent="❌";st.textContent="執行錯誤";ap(getMsg(ex),"err");}'
-                        + '  }).catch(function(ex){sp.textContent="❌";st.textContent="載入失敗";ap(getMsg(ex),"err");});'
-                        + '};'
-                        + 's.onerror=function(){sp.textContent="❌";st.textContent="無法載入 Pyodide（需要網路連線）";};'
-                        + 'document.head.appendChild(s);'
-                        + '<\/script></body></html>';
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
 
                 // ── 其他語言: 顯示原始碼 ─────────────────────────
                 } else {
@@ -13277,7 +13509,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                     const el2 = loading();
                     if (el2) el2.style.display = 'none';
                     if (status()) status().textContent = _lang.toUpperCase() + ' · 渲染完成 ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
-<<<<<<< HEAD
                     // ★ 注入 prompt bridge + contextmenu 攔截（補強 HTML/JS/React 等語言）
                     try {
                         var fw = fr.contentWindow;
@@ -13299,18 +13530,13 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
                             fw.document.addEventListener('contextmenu', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
                         }
                     } catch(e) { /* cross-origin 時略過 */ }
-=======
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                 };
             }
 
             // ── 公開 API ─────────────────────────────────────────
             return {
-<<<<<<< HEAD
                 getCurrentCode: function() { return _code; },
                 getCurrentLang: function() { return _lang; },
-=======
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
                 // 從對話卡片開啟
                 openFromCard: function(cardEl) {
                     const encoded = cardEl.getAttribute('data-code');
@@ -13679,7 +13905,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
          style="display:none;position:fixed;inset:0;z-index:99980;background:#0a0f1e;flex-direction:column;touch-action:pan-y;"
          class="flex">
 
-<<<<<<< HEAD
         <!-- ★ Canvas input bar — 底部固定輸入列，不遮蔽輸出 -->
         <div id="nova-canvas-input-modal" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:99995;background:#1e293b;border-top:2px solid #3b82f6;box-shadow:0 -4px 24px rgba(0,0,0,0.5);" onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()" ontouchend="event.stopPropagation()">
             <div style="padding:8px 12px 4px 12px;">
@@ -13768,81 +13993,6 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
     <!-- Canvas 聊天中的浮動卡片（點擊可打開工作區）-->
     <!-- 由 JS 動態插入到 chat-container -->
 
-=======
-        <!-- Canvas Header -->
-        <div id="nova-canvas-header"
-             style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f172a;border-bottom:1px solid #1e293b;flex-shrink:0;min-height:52px;">
-            <!-- 返回聊天 -->
-            <button onclick="novaCanvas.hide()"
-                    style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#1e293b;color:#94a3b8;flex-shrink:0;border:none;cursor:pointer;"
-                    ontouchstart="" class="active:scale-90 transition-transform">
-                <i class="ph-bold ph-arrow-left" style="font-size:18px;"></i>
-            </button>
-            <!-- 標題 -->
-            <div style="flex:1;overflow:hidden;">
-                <p id="nova-canvas-title" style="font-size:13px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Canvas 工作區</p>
-                <p id="nova-canvas-lang" style="font-size:10px;color:#64748b;margin-top:1px;">HTML</p>
-            </div>
-            <!-- 工具列 -->
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                <!-- 重新整理 -->
-                <button onclick="novaCanvas.refresh()"
-                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
-                        ontouchstart="" class="active:scale-90 transition-transform" title="重新整理">
-                    <i class="ph-bold ph-arrow-clockwise" style="font-size:16px;"></i>
-                </button>
-                <!-- 切換：預覽 / 原始碼 -->
-                <button id="nova-canvas-mode-btn" onclick="novaCanvas.toggleMode()"
-                        style="display:flex;align-items:center;gap:4px;padding:0 10px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;font-size:11px;font-weight:700;"
-                        ontouchstart="" class="active:scale-90 transition-transform">
-                    <i id="nova-canvas-mode-icon" class="ph-bold ph-eye" style="font-size:15px;"></i>
-                    <span id="nova-canvas-mode-label">預覽</span>
-                </button>
-                <!-- 複製程式碼 -->
-                <button onclick="novaCanvas.copyCode()"
-                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
-                        ontouchstart="" class="active:scale-90 transition-transform" title="複製程式碼">
-                    <i class="ph-bold ph-copy" style="font-size:16px;"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Canvas 主體 -->
-        <div style="flex:1;overflow:hidden;position:relative;">
-            <!-- iframe 預覽（安全沙盒） -->
-            <iframe id="nova-canvas-iframe"
-                    sandbox="allow-scripts allow-forms allow-pointer-lock allow-popups allow-modals allow-same-origin"
-                    allow="camera;microphone"
-                    style="width:100%;height:100%;border:none;background:#0d1117;display:block;"
-                    title="Canvas 預覽"></iframe>
-
-            <!-- 原始碼檢視 -->
-            <textarea id="nova-canvas-source"
-                      style="display:none;width:100%;height:100%;background:#0d1117;color:#e6edf3;font-family:monospace;font-size:12px;line-height:1.6;padding:16px;border:none;outline:none;resize:none;white-space:pre;overflow-wrap:normal;overflow-x:auto;"
-                      readonly></textarea>
-
-            <!-- 載入中遮罩 -->
-            <div id="nova-canvas-loading"
-                 style="display:none;position:absolute;inset:0;background:#0a0f1e;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
-                <div style="width:36px;height:36px;border:3px solid #1e293b;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-                <p style="color:#64748b;font-size:13px;">渲染中...</p>
-            </div>
-        </div>
-
-        <!-- Canvas 底部狀態列 -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#0f172a;border-top:1px solid #1e293b;flex-shrink:0;min-height:40px;">
-            <p id="nova-canvas-status" style="font-size:10px;color:#475569;">就緒</p>
-            <button onclick="novaCanvas.hide()"
-                    style="font-size:11px;font-weight:700;color:#3b82f6;background:none;border:none;cursor:pointer;padding:4px 8px;">
-                ← 返回對話
-            </button>
-        </div>
-    </div>
-
-    <!-- Canvas 聊天中的浮動卡片（點擊可打開工作區）-->
-    <!-- 由 JS 動態插入到 chat-container -->
-
->>>>>>> 5f5e1f4c9fe38f661a01362b473444570e75a328
 
 </body>
 </html>
