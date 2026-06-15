@@ -10668,6 +10668,7 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
                 isLocationQuery: false,
                 isCodeRequest: false, codeLanguage: '',
                 isCanvasConvert: false,
+                isPPTIntent: false,
             };
             {
                 const _txt = text.trim();
@@ -10675,7 +10676,7 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
                 // 明確正則覆蓋的標準措辭，就視為候選，值得花一次 LLM 呼叫釐清
                 const _hasActionVerb = /(生成|產生|製作|幫我|做一個|做一份|寫一個|寫一份|查一下|查詢|搬到|轉成|轉為|轉換|改成|改寫|畫|建立|create|make|build|write|draw|generate|convert)/i.test(_txt);
                 // 已有明確標準關鍵字的，不需要分類器介入（避免不必要的 API 呼叫）
-                const _alreadyExplicit = /(圖片|照片|圖像|插圖|海報|image|photo|picture|poster|附近|最近|在哪|地址|導航|怎麼走|距離|離我|座標|gps|GPS|react|jsx|tsx|python|py|html|網頁|canvas|Canvas)/i.test(_txt);
+                const _alreadyExplicit = /(圖片|照片|圖像|插圖|海報|image|photo|picture|poster|附近|最近|在哪|地址|導航|怎麼走|距離|離我|座標|gps|GPS|react|jsx|tsx|python|py\x08|html|網頁|canvas|Canvas|簡報|投影片|ppt|PPT|slide|presentation)/i.test(_txt);
                 const _ambiguousActionCandidate = _hasActionVerb && !_alreadyExplicit && _txt.length >= 4 && _txt.length <= 300;
 
                 // ★ 無動詞的地點查詢候選：「附近的便利商店」「這附近有美食嗎」等
@@ -10886,6 +10887,9 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
                 
                 // 🌟 PPT 意圖偵測（優先攔截，避免後面的 GPS / 地點邏輯干擾）
                 const _isPPTIntent = text.includes("簡報") || text.includes("PPT") || text.includes("ppt") || text.includes("Ppt");
+                // ★ 同步寫入 _intentHints，供 fetchAIResponse 判斷 isImageIntent 時
+                //   排除「製作簡報/生成PPT」等被誤判為圖片生成的情況
+                _intentHints.isPPTIntent = _isPPTIntent;
 
                 // 🌟 寫入 GPS 座標記憶（PPT 製作 / 圖片生成 時跳過，避免 AI 誤解為需要定位資訊）
                 if (appState.lastLat && appState.lastLon && !_isPPTIntent && !isImageIntent && (_isGeoIntent(text) || _intentHints.isLocationQuery)) {
@@ -11455,6 +11459,7 @@ if (appState.pendingAnalyzeContextId) {
                 isLocationQuery: false,
                 isCodeRequest: false, codeLanguage: '',
                 isCanvasConvert: false,
+                isPPTIntent: false,
             };
         // 💡 修正 3：防幻覺機制 - 若為多 AI 協作 (multi 模型)、深度研究或資料分析，強制在底層附加嚴格查證指令
         const isMultiAI = (model && model.includes('multi')) || (appState.currentModel && appState.currentModel.includes('multi'));
@@ -11534,7 +11539,10 @@ if (appState.pendingAnalyzeContextId) {
 
             // ★ 階段2：通用意圖分類器（_intentHints，已於函式最前面統一呼叫過一次）
             //   涵蓋「生成一張早安圖」「畫個LOGO」等無標準關鍵字的模糊表達
-            let isImageIntent = _isImageModelSelected || _imgTestF(finalPrompt.trim()) || _intentHints.isImageGen;
+            // ★ 「製作簡報/生成PPT/產生投影片」等措辭含「生成/製作」動詞，
+            //   可能被 _imgTestF 或輕量分類器誤判為圖片生成意圖，
+            //   導致跳出解析度/比例選擇器。PPT 意圖具最高優先權，強制排除。
+            let isImageIntent = !_intentHints.isPPTIntent && (_isImageModelSelected || _imgTestF(finalPrompt.trim()) || _intentHints.isImageGen);
 
             if (!_isImageModelSelected && _intentHints.isImageGen && _intentHints.refinedImagePrompt && _intentHints.refinedImagePrompt.trim()) {
                 finalPrompt = _intentHints.refinedImagePrompt.trim();
