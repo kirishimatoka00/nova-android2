@@ -6250,7 +6250,7 @@ return; }
                 showToast("✅ EXCEL 已產生！");
             } catch (e) {
                 console.error("Excel Generation Error:", e);
-                alert("❌ EXCEL 產生失敗: " + e.message);
+                showToast("❌ EXCEL 產生失敗: " + e.message);
             }
         };
 
@@ -6270,9 +6270,23 @@ return; }
 
         // --- 新增：PPT 生成與下載函數 ---
         window.downloadGeneratedPPT = async function(base64Data) {
+            // ★ 診斷用：函式一開始立即顯示，確認 onclick 確實有觸發此函式
+            //   （若點擊後連這個 toast 都沒出現，代表問題在按鈕綁定本身，
+            //   而非函式內部邏輯）
+            showToast('🟢 收到下載請求，開始解析簡報資料…');
             try {
+                // ★ 提早檢查 PptxGenJS 是否已成功載入（./vendor/pptxgen.bundle.js）
+                //   若該檔案未隨 APK 打包或路徑錯誤，PptxGenJS 會是 undefined，
+                //   後面 new PptxGenJS() 會拋出 TypeError，但若 alert() 在此
+                //   WebView 無聲失敗，使用者會完全看不到任何錯誤訊息
+                if (typeof PptxGenJS === 'undefined') {
+                    showToast('❌ PptxGenJS 函式庫未載入（vendor/pptxgen.bundle.js 缺失或路徑錯誤），無法產生 PPT');
+                    return;
+                }
+
                 let jsonStr = decodeURIComponent(escape(atob(base64Data)));
                 let pptData = JSON.parse(jsonStr);
+                showToast(`✅ 簡報資料解析成功（${(pptData.slides||[]).length} 頁），準備開始生成…`);
 
                 // ══════════════════════════════════════════════════════════
                 // AI 圖片生成引擎
@@ -6473,13 +6487,18 @@ return; }
                 //   改用 pptx.write({outputType:'base64'}) 取得純 base64 內容，
                 //   交給既有的 downloadDataUriFile()（已處理 Capacitor Filesystem +
                 //   Share 流程，與圖片下載共用同一套已驗證可用的機制）。
-                const pptxBase64 = await pptx.write({ outputType: 'base64' });
+                const pptxBase64 = await Promise.race([
+                    pptx.write({ outputType: 'base64' }),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('pptx.write() 逾時（30秒），可能是 vendor/pptxgen.bundle.js 版本不支援 write({outputType:"base64"})')), 30000))
+                ]);
                 const pptxDataUri = `data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,${pptxBase64}`;
                 await downloadDataUriFile(pptxDataUri, filename);
                 showToast("✅ AI 圖文簡報已產生！");
             } catch (e) {
                 console.error("PPT Generation Error:", e);
-                alert("❌ PPT 產生失敗: " + e.message);
+                // ★ alert() 在此 Capacitor WebView 可能無聲失敗（與 window.prompt() 同類問題），
+                //   改用已驗證可用的 showToast 確保使用者一定能看到錯誤訊息
+                showToast("❌ PPT 產生失敗: " + e.message);
             }
         };
 
