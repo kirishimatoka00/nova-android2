@@ -6406,14 +6406,23 @@ return; }
                 };
 
                 const totalSlides = (pptData.slides || []).length;
-                showToast(`🚀 PPT 生成開始！共 ${totalSlides} 頁投影片 + 封面，正在生成封面配圖…`);
+                // ★ 預設 true（向下相容舊格式 JSON，未帶 wantImages 欄位時維持原行為）
+                //   使用者若在製作前選擇「僅文字」，AI 會在 JSON 標記 wantImages:false，
+                //   此時完全跳過配圖 LLM 呼叫（不執行 genAIImage），加速產生並節省 API 用量
+                const _wantImages = pptData.wantImages !== false;
+                showToast(_wantImages
+                    ? `🚀 PPT 生成開始！共 ${totalSlides} 頁投影片 + 封面，正在生成封面配圖…`
+                    : `🚀 PPT 生成開始！共 ${totalSlides} 頁投影片 + 封面（純文字模式，不產生配圖）…`);
 
                 let pptx = new PptxGenJS();
                 pptx.layout = 'LAYOUT_16x9';
 
                 // ── 封面頁 ──
-                showToast(`🖼️ [封面] 生成配圖中…`);
-                const coverImg = await genAIImage(pptData.title || 'Presentation Cover', pptData.subtitle || '', -1);
+                let coverImg = null;
+                if (_wantImages) {
+                    showToast(`🖼️ [封面] 生成配圖中…`);
+                    coverImg = await genAIImage(pptData.title || 'Presentation Cover', pptData.subtitle || '', -1);
+                }
                 let coverSlide = pptx.addSlide();
                 coverSlide.background = { color: "0F172A" };
                 if (coverImg) {
@@ -6434,8 +6443,13 @@ return; }
                 if (pptData.slides && Array.isArray(pptData.slides)) {
                     for (let si = 0; si < pptData.slides.length; si++) {
                         const slideData = pptData.slides[si];
-                        showToast(`📊 排版投影片 ${si + 1} / ${totalSlides}：生成配圖中…`);
-                        const imgData = await genAIImage(slideData.title || 'slide', slideData.content, si);
+                        let imgData = null;
+                        if (_wantImages) {
+                            showToast(`📊 排版投影片 ${si + 1} / ${totalSlides}：生成配圖中…`);
+                            imgData = await genAIImage(slideData.title || 'slide', slideData.content, si);
+                        } else {
+                            showToast(`📊 排版投影片 ${si + 1} / ${totalSlides}（純文字）…`);
+                        }
                         let slide = pptx.addSlide();
 
                         const items = slideData.content
@@ -6481,7 +6495,9 @@ return; }
                 }
 
                 let filename = (pptData.title || "NOVA_Presentation").replace(/[\\/:*?"<>|]/g, '_') + ".pptx";
-                showToast(`📦 所有配圖完成！正在封裝 ${totalSlides + 1} 頁投影片為 .pptx…`, 5000);
+                showToast(_wantImages
+                    ? `📦 所有配圖完成！正在封裝 ${totalSlides + 1} 頁投影片為 .pptx…`
+                    : `📦 內容排版完成！正在封裝 ${totalSlides + 1} 頁投影片為 .pptx…`, 5000);
                 // ★ 不使用 pptx.writeFile()：其內部用 <a download> + blob URL，
                 //   在 Android Capacitor WebView 中 download 屬性被忽略，檔案無法產出。
                 //   改用 pptx.write({outputType:'base64'}) 取得純 base64 內容，
@@ -6520,6 +6536,21 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
             // 🌟 新增：專門處理 Data URI 轉換成 Blob 並強制觸發下載的函數
             // ★ 解析度選擇器：回傳 Promise<'1K'|'2K'|'4K'|'default'|null>
             // ★ 解析度選擇器：兩步驟，回傳 { res, ratio } 或 null（取消）
+            // ★ PPT 配圖選擇：回傳 Promise<true|false|null>
+            //   true = 需要插圖、false = 僅文字、null = 取消整個製作流程
+            window.showPPTImageChoicePicker = function() {
+                return new Promise(function(resolve) {
+                    const modal = document.getElementById('nova-ppt-image-modal');
+                    if (!modal) { resolve(true); return; } // 找不到 modal 元素則維持舊行為（預設要插圖）
+                    window._novaPPTImgResolve = function(val) {
+                        modal.style.display = 'none';
+                        window._novaPPTImgResolve = null;
+                        resolve(val);
+                    };
+                    modal.style.display = 'flex';
+                });
+            };
+
             window.showResolutionPicker = function() {
                 return new Promise(function(resolve) {
                     const modal = document.getElementById('nova-resolution-modal');
@@ -9877,9 +9908,20 @@ try {
             const n = appState.notes.find(x => String(x.id) === String(id)); if (!n) return;
             if (appState.currentModel !== 'gemini') { alert("文字深度分析建議使用 Gemini 模型，系統已自動為您切換。"); setModel('gemini'); }
 
+            // ★ 修復：原本完全沒有把筆記內容帶入 prompt，AI 收到的只有指令本身，
+            //   沒有任何「以下筆記內容」的實際文字，因此永遠回覆「筆記內容不足以產生有效摘要」。
+            //   現在比照 generatePPTFromNote() 的做法，將 HTML 筆記轉為純文字後一併附上。
+            let contentText = n.isHtml ? n.content.replace(/<[^>]+>/g, '\n').replace(/&nbsp;/g, ' ') : (n.content || '');
+            contentText = contentText.trim();
+
+            if (!contentText) {
+                addMessage('⚠️ 這篇筆記目前沒有任何內容，無法進行分析。', 'system');
+                return;
+            }
+
             appState.pendingAnalyzeContextId = id;
             appState.pendingAnalyzeType = 'textNote';
-            appState.pendingAnalyzePrompt = `請幫我深度分析並總結以下筆記內容，提取出最重要的關鍵字與結構化重點。\n\n【嚴格約束】：請「絕對忠於提供的筆記內容」，只做客觀的整理，絕對不要給出任何額外的個人建議、評論，也不要自行腦補外部資訊。若筆記內容過短或無具體意義，請直接回覆「筆記內容不足以產生有效摘要」。`;
+            appState.pendingAnalyzePrompt = `請幫我深度分析並總結以下筆記內容，提取出最重要的關鍵字與結構化重點。\n\n【嚴格約束】：請「絕對忠於提供的筆記內容」，只做客觀的整理，絕對不要給出任何額外的個人建議、評論，也不要自行腦補外部資訊。若筆記內容過短或無具體意義，請直接回覆「筆記內容不足以產生有效摘要」。\n\n【以下為筆記「${n.title || '(未命名)'}」的完整內容】：\n${contentText}`;
 
             if(!await showConfirm(`即將對「${n.title}」進行深度摘要分析！`)) {
                 appState.pendingAnalyzeContextId = null; appState.pendingAnalyzeType = ''; return;
@@ -10780,6 +10822,26 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
             // 讓 AI 判斷是否符合並輸出 skill_call JSON 觸發執行
             if (typeof window.NovaSkills === 'object') {
                 let _skillList = window.NovaSkills.getManifest();
+
+                // ★ /skill 精確指向呼叫：使用者輸入「/skill」（須完全符合，大小寫須一致）
+                //   開頭，後面接上目的描述，例如「/skill 計算複利 本金10萬 利率5% 10年」。
+                //   此語法代表使用者明確要求呼叫本地技能，系統應優先判斷目的最符合
+                //   哪一個已載入的技能，並強制要求 AI 必須選擇並呼叫，不可改用一般文字回覆。
+                const _skillDirectMatch = /^\/skill\s+([\s\S]+)$/.exec(text.trim());
+                if (_skillDirectMatch) {
+                    const _skillGoal = _skillDirectMatch[1].trim();
+                    if (_skillList.length === 0) {
+                        systemPromptAddon += `\n【⚠️ /skill 指令錯誤】：使用者使用了 /skill 指令，但裝置上目前沒有載入任何本地技能。請直接回覆：「目前沒有已載入的本地技能，請先在設定頁匯入或建立技能。」不要嘗試回答原本的問題。\n`;
+                    } else {
+                        const _skillDescsDirect = _skillList.map(s =>
+                            `- ${s.name}: ${s.description}\n  參數結構: ${JSON.stringify(s.parameters)}`
+                        ).join('\n');
+                        systemPromptAddon += `\n【🎯 /skill 精確指向呼叫 - 最高優先，必須執行】\n使用者使用「/skill」指令明確要求呼叫本地技能，目的是：「${_skillGoal}」。\n【強制規定】：\n1. 你【必須】從下方技能清單中選出與目的最相符的一個技能，並輸出 skill_call JSON（用 \`\`\`skill_call 和 \`\`\` 包住，回覆中只能有這一個區塊，不要加其他文字、不要寒暄）：\n\`\`\`skill_call\n{"name": "技能名稱", "args": { 對應參數 }}\n\`\`\`\n2. 從使用者的目的描述中提取必要的參數值，填入 args。若描述中缺少某個必填參數，仍盡可能合理推估或留空，不要因此拒絕呼叫。\n3. 【禁止】：除非技能清單完全為空，否則【不可以】用一般文字回覆、不可以說「找不到相關技能」、不可以反問使用者。必須從清單中選一個最接近的技能呼叫。\n\n可用技能列表：\n${_skillDescsDirect}\n`;
+                    }
+                    // /skill 指令已給出最高優先級指令，不需再疊加下方一般技能判斷的提示
+                    _skillList = [];
+                }
+
                 // ★ 避免「製作PPT/簡報」同時收到兩套互相衝突的指令：
                 //   系統內建的 PPT 產生流程（輸出 ```json{slides...}```）
                 //   vs 使用者自訂技能（輸出 ```skill_call```），
@@ -10855,7 +10917,28 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
             }
             // --- 新增：攔截 PPT 簡報意圖，強制回傳 JSON 格式 ---
             if (text.includes("簡報") || text.includes("PPT") || text.includes("ppt") || text.includes("Ppt")) {
-                systemPromptAddon += `\n【💡 特殊技能觸發】：使用者希望製作 PPT 簡報。\n【強制規定】：\n1. 必須閱讀使用者提供的「完整內容」，不得只取前段，每個章節/段落都必須有對應投影片。\n2. 嚴格在對話最後面使用以下 JSON 格式輸出(並用 \`\`\`json 和 \`\`\` 包著)，系統會自動攔截並轉換為真正的 .pptx 檔案給使用者下載：\n\`\`\`json\n{\n  "title": "簡報主標題",\n  "subtitle": "簡報副標題 (選填)",\n  "slides": [\n    { "title": "第一頁標題", "content": ["重點項目1", "重點項目2"], "imageQuery": "3-5 English keywords for stock photo (e.g. teamwork meeting office)" },\n    { "title": "第二頁標題", "content": ["段落或重點..."], "imageQuery": "relevant image keywords" }\n  ]\n}\n\`\`\`\n3. slides 陣列必須涵蓋所有章節，不得遺漏。\n4. 每一頁都必須填寫 imageQuery（3~5 個英文關鍵字），用於自動搜尋配圖。\n5. 絕對要保證 JSON 格式正確！\n6. 【嚴格禁止】：回覆中絕對不可提及任何 GPS 座標、緯度、經度或地理定位數值，此資訊與簡報製作無關，請忽略歷史訊息中任何位置相關的系統數據。\n`;
+                // ★ 先詢問使用者是否需要 AI 配圖：若選擇「僅文字」，
+                //   就不在系統提示中要求 imageQuery，且讓 AI 在 JSON 標記
+                //   wantImages:false，downloadGeneratedPPT() 會據此完全跳過
+                //   配圖 LLM 呼叫（更快產生，也避免不必要的 API 用量）
+                let _pptWantImages = true;
+                if (typeof window.showPPTImageChoicePicker === 'function') {
+                    const _pptChoice = await window.showPPTImageChoicePicker();
+                    if (_pptChoice === null) {
+                        // 使用者取消整個製作流程
+                        addMessage('已取消製作簡報。', 'system');
+                        appState.isThinking = false;
+                        if (typeof updateSendButton === 'function') updateSendButton();
+                        return;
+                    }
+                    _pptWantImages = _pptChoice;
+                }
+
+                if (_pptWantImages) {
+                    systemPromptAddon += `\n【💡 特殊技能觸發】：使用者希望製作 PPT 簡報，且已選擇「需要插圖」。\n【強制規定】：\n1. 必須閱讀使用者提供的「完整內容」，不得只取前段，每個章節/段落都必須有對應投影片。\n2. 嚴格在對話最後面使用以下 JSON 格式輸出(並用 \`\`\`json 和 \`\`\` 包著)，系統會自動攔截並轉換為真正的 .pptx 檔案給使用者下載：\n\`\`\`json\n{\n  "title": "簡報主標題",\n  "subtitle": "簡報副標題 (選填)",\n  "wantImages": true,\n  "slides": [\n    { "title": "第一頁標題", "content": ["重點項目1", "重點項目2"], "imageQuery": "3-5 English keywords for stock photo (e.g. teamwork meeting office)" },\n    { "title": "第二頁標題", "content": ["段落或重點..."], "imageQuery": "relevant image keywords" }\n  ]\n}\n\`\`\`\n3. slides 陣列必須涵蓋所有章節，不得遺漏。\n4. 每一頁都必須填寫 imageQuery（3~5 個英文關鍵字），用於自動搜尋配圖。\n5. 絕對要保證 JSON 格式正確！\n6. 【嚴格禁止】：回覆中絕對不可提及任何 GPS 座標、緯度、經度或地理定位數值，此資訊與簡報製作無關，請忽略歷史訊息中任何位置相關的系統數據。\n`;
+                } else {
+                    systemPromptAddon += `\n【💡 特殊技能觸發】：使用者希望製作 PPT 簡報，且已明確選擇「僅文字，不需要插圖」。\n【強制規定】：\n1. 必須閱讀使用者提供的「完整內容」，不得只取前段，每個章節/段落都必須有對應投影片。\n2. 嚴格在對話最後面使用以下 JSON 格式輸出(並用 \`\`\`json 和 \`\`\` 包著)，系統會自動攔截並轉換為真正的 .pptx 檔案給使用者下載：\n\`\`\`json\n{\n  "title": "簡報主標題",\n  "subtitle": "簡報副標題 (選填)",\n  "wantImages": false,\n  "slides": [\n    { "title": "第一頁標題", "content": ["重點項目1", "重點項目2"] },\n    { "title": "第二頁標題", "content": ["段落或重點..."] }\n  ]\n}\n\`\`\`\n3. slides 陣列必須涵蓋所有章節，不得遺漏。\n4. 【重要】使用者已選擇不需要插圖，【絕對不要】輸出 imageQuery 欄位，系統會完全跳過配圖步驟，產生純文字版投影片。\n5. 絕對要保證 JSON 格式正確！\n6. 【嚴格禁止】：回覆中絕對不可提及任何 GPS 座標、緯度、經度或地理定位數值，此資訊與簡報製作無關，請忽略歷史訊息中任何位置相關的系統數據。\n`;
+                }
             }
 
             // --- ⚛️ React / HTML Canvas 環境限制注入 ---
@@ -13806,6 +13889,30 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
     </div>
 
     <!-- ✅ 通用單行輸入 Modal (移至 body 底層，確保 z-index 生效) -->
+    <!-- ★ PPT 配圖選擇 Modal：製作簡報前先詢問是否需要 AI 配圖 -->
+    <div id="nova-ppt-image-modal" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(2,6,23,0.88);backdrop-filter:blur(4px);" class="flex items-center justify-center" onclick="event.stopPropagation()">
+        <div class="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-white font-bold text-base flex items-center gap-2">
+                    <i class="ph-bold ph-presentation-chart"></i> 簡報配圖設定
+                </h3>
+                <button onclick="window._novaPPTImgResolve&&window._novaPPTImgResolve(null)" class="text-slate-400 hover:text-white p-1"><i class="ph-bold ph-x"></i></button>
+            </div>
+            <p class="text-slate-400 text-xs mb-4">每頁配圖由 AI 生成，會增加產生時間。是否需要為這份簡報加入插圖？</p>
+            <div class="flex flex-col gap-2">
+                <button onclick="window._novaPPTImgResolve&&window._novaPPTImgResolve(true)"
+                    class="w-full py-3 rounded-xl border border-slate-600 bg-slate-700 hover:bg-blue-700 hover:border-blue-500 text-white font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <span class="text-base">🎨</span> 需要插圖（每頁自動配圖）
+                </button>
+                <button onclick="window._novaPPTImgResolve&&window._novaPPTImgResolve(false)"
+                    class="w-full py-3 rounded-xl border border-slate-600 bg-slate-700 hover:bg-emerald-700 hover:border-emerald-500 text-white font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <span class="text-base">📝</span> 僅文字（不需要插圖，產生更快）
+                </button>
+                <button onclick="window._novaPPTImgResolve&&window._novaPPTImgResolve(null)"
+                    class="w-full py-2.5 text-sm font-bold bg-slate-700/50 hover:bg-slate-600 text-slate-400 rounded-xl transition-colors mt-1">取消製作簡報</button>
+            </div>
+        </div>
+    </div>
     <!-- ★ NOVA 圖片設定 Modal（解析度 + 比例，兩步驟） -->
     <div id="nova-resolution-modal" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(2,6,23,0.88);backdrop-filter:blur(4px);" class="flex items-center justify-center" onclick="event.stopPropagation()">
         <div class="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5" onclick="event.stopPropagation()" style="max-height:90vh;overflow-y:auto;">
