@@ -3356,9 +3356,9 @@ return html;
             if (window._customConfirmResolve) { window._customConfirmResolve(false); window._customConfirmResolve = null; }
         };
 
-        function showToast(message) {
+        function showToast(message, duration) {
             const toast = document.getElementById("toast"); toast.innerText = message; toast.className = "show";
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, duration || 3000);
         }
 
         // ================= 前端介面輔助函數 =================
@@ -6481,7 +6481,7 @@ return; }
                 }
 
                 let filename = (pptData.title || "NOVA_Presentation").replace(/[\\/:*?"<>|]/g, '_') + ".pptx";
-                showToast(`📦 所有配圖完成！正在封裝 ${totalSlides + 1} 頁投影片為 .pptx…`);
+                showToast(`📦 所有配圖完成！正在封裝 ${totalSlides + 1} 頁投影片為 .pptx…`, 5000);
                 // ★ 不使用 pptx.writeFile()：其內部用 <a download> + blob URL，
                 //   在 Android Capacitor WebView 中 download 屬性被忽略，檔案無法產出。
                 //   改用 pptx.write({outputType:'base64'}) 取得純 base64 內容，
@@ -6491,14 +6491,17 @@ return; }
                     pptx.write({ outputType: 'base64' }),
                     new Promise((_, rej) => setTimeout(() => rej(new Error('pptx.write() 逾時（30秒），可能是 vendor/pptxgen.bundle.js 版本不支援 write({outputType:"base64"})')), 30000))
                 ]);
+                console.log('[PPT] pptx.write() 完成，base64 長度:', pptxBase64.length);
+                showToast(`🗳️ 簡報檔案已封裝完成（${Math.round(pptxBase64.length/1024)}KB），準備儲存/分享…`, 5000);
                 const pptxDataUri = `data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,${pptxBase64}`;
                 await downloadDataUriFile(pptxDataUri, filename);
-                showToast("✅ AI 圖文簡報已產生！");
+                console.log('[PPT] downloadDataUriFile() 已完成');
+                showToast("✅ AI 圖文簡報已產生！", 6000);
             } catch (e) {
                 console.error("PPT Generation Error:", e);
                 // ★ alert() 在此 Capacitor WebView 可能無聲失敗（與 window.prompt() 同類問題），
-                //   改用已驗證可用的 showToast 確保使用者一定能看到錯誤訊息
-                showToast("❌ PPT 產生失敗: " + e.message);
+                //   改用已驗證可用的 showToast（延長顯示時間，確保使用者看得到）
+                showToast("❌ PPT 產生失敗: " + e.message, 8000);
             }
         };
 
@@ -6680,12 +6683,14 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
 
                         if (_finalUri && CapShare) {
                             // Share plugin → 讓使用者選擇「儲存至相簿」或「傳送至其他 App」
+                            console.log('[downloadDataUriFile] 即將呼叫 CapShare.share()，檔案已寫入 CACHE:', _finalUri);
                             try {
                                 await CapShare.share({
                                     title: _safeName,
                                     files: [_finalUri],
                                     dialogTitle: '儲存圖片至相簿或其他位置'
                                 });
+                                console.log('[downloadDataUriFile] CapShare.share() 已完成');
                                 _saved = true;
                             } catch(shareErr) {
                                 // 使用者按取消也算成功（檔案仍在 CACHE 可找到）
@@ -6732,7 +6737,7 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         if(typeof showToast === 'function') showToast(`✅ 已開始下載：${filename}`);
                     }
                 } catch(e) {
-                    if(typeof showToast === 'function') showToast('❌ 下載失敗：' + e.message);
+                    if(typeof showToast === 'function') showToast('❌ 下載失敗：' + e.message, 8000);
                     else alert('下載失敗：' + e.message);
                 }
             };
@@ -10774,7 +10779,23 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
             // 若使用者裝置上有放置自訂技能，將清單告知 AI，
             // 讓 AI 判斷是否符合並輸出 skill_call JSON 觸發執行
             if (typeof window.NovaSkills === 'object') {
-                const _skillList = window.NovaSkills.getManifest();
+                let _skillList = window.NovaSkills.getManifest();
+                // ★ 避免「製作PPT/簡報」同時收到兩套互相衝突的指令：
+                //   系統內建的 PPT 產生流程（輸出 ```json{slides...}```）
+                //   vs 使用者自訂技能（輸出 ```skill_call```），
+                //   AI 在兩者間隨機選擇，導致行為不一致（有時用技能、有時不用）。
+                //   偵測到 PPT 相關文字時，從技能清單中排除同樣處理 PPT 的自訂技能，
+                //   讓內建流程（已加入逐步診斷 toast，較易排查問題）成為唯一路徑。
+                const _textMatchesPPT = /簡報|投影片|ppt|PPT|slide|presentation/i.test(text);
+                if (_textMatchesPPT) {
+                    const _beforeCount = _skillList.length;
+                    _skillList = _skillList.filter(s =>
+                        !/ppt|pptx|簡報|投影片|presentation|slide/i.test(s.name + ' ' + s.description)
+                    );
+                    if (_skillList.length < _beforeCount) {
+                        console.log('[NovaSkills] 偵測到 PPT 相關請求，已從技能清單排除同類自訂技能，避免與內建流程衝突');
+                    }
+                }
                 if (_skillList.length > 0) {
                     const _skillDescs = _skillList.map(s =>
                         `- ${s.name}: ${s.description}\n  參數結構: ${JSON.stringify(s.parameters)}`
