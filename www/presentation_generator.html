@@ -542,19 +542,6 @@
                 </div>
             </div>
             <!-- Dynamic editing mode toggle -->
-            <div class="mt-2 flex items-center gap-2.5 bg-slate-800/60 border border-slate-700 rounded-xl px-3.5 py-2.5">
-                <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" id="chk-dynamic-mode" class="sr-only peer" checked>
-                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                </label>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5">
-                        <i class="ph-fill ph-pencil-simple text-emerald-400 text-sm"></i>
-                        <span class="text-[11px] text-slate-200 font-semibold">動態編輯模式</span>
-                    </div>
-                    <p class="text-[10px] text-slate-500 mt-0.5">開啟：物件可拖曳、文字可直接編輯色彩大小。關閉：全靜態 HTML，由 AI 審查員負責修正排版與對比</p>
-                </div>
-            </div>
         </div>
 
         <!-- Progress -->
@@ -2671,19 +2658,16 @@ ${slideData.table_data ? `
 ▓▓▓ 三區域佈局系統（MANDATORY ZONE SYSTEM）▓▓▓
 每張投影片畫布 1920×1080px，嚴格分3個不重疊區域，所有元素必須落在對應區域內：
 
-  【ZONE 1 — 標題區 (Title Zone)】  y = 0 ~ 136px
-    · 唯一一個標題 .dg：translate(60,12)，width=1800，height=110
-    · 標題 .rb div 必須靠左對齊：style="text-align:left; padding-left:20px"
-    · 標題 width 必須橫跨整張投影片（1800px），禁止縮短為半版寬
-    · 標準版面 font-size: 44~48px；title_only 版面 font-size: 64~80px
+  【ZONE 1 — 標題區 (Title Zone)】  y = 0 ~ 150px
+    · 唯一一個標題 .dg：translate(70,28)，width=1780，height=130
+    · 標準版面 font-size: 44~50px；title_only 版面 font-size: 64~80px
     · ⛔ 禁止在此區放圖片、要點、圖表
-    · ⛔ 圖片/diagram/要點的 Y 座標不得小於 136（標題底部 122 + 14px 間距）
 
-  【ZONE 2 — 主內容區 (Content Zone)】  y = 136px ~ 1060px（高度=924px）
-    根據 layout 類型分配（所有內容 Y ≥ 136，建議 Y ≥ 146 留緩衝）：
-    · text_and_image：文字左欄 x=60 w=860，圖片右欄 x=940 w=920，y 從 146 開始
-    · text_only：單欄 x=60 w=1800，最多5個要點卡（每卡高度≤170px）
-    · diagram_slide：圖表容器 x=60 y=146 w=1800 h=874
+  【ZONE 2 — 主內容區 (Content Zone)】  y = 155px ~ 1015px（高度=860px）
+    根據 layout 類型分配：
+    · text_and_image：文字左欄 x=70 w=860，圖片右欄 x=990 w=860，y 從 160 開始
+    · text_only：單欄 x=70 w=1780，最多5個要點卡（每卡高度≤160px）
+    · diagram_slide：圖表容器 x=70 y=160 w=1780 h=840
     · title_only：裝飾/副標置中，y=180~1000 自由設計
 
   【ZONE 3 — 頁腳區 (Footer Zone, 選用)】  y = 1020 ~ 1070px
@@ -2796,15 +2780,13 @@ ${(()=>{
     - 裝飾線條：<line x1="120" y1="340" x2="500" y2="340" stroke="accent色" stroke-width="3"/>
     【設計原則】色彩不超過 3 種主色系，但透過不同 opacity 創造層次感`;
   if (L === 'text_only') return `  ★ text_only（純文字）：
-    - 標題卡：translate(60,12)，width:1800，height:110，font-size:48px，bold
-      ⚠ 標題 .rb div 必須加 style="text-align:left; padding-left:20px"（靠左，全寬一行不可壓縮）
-      ⚠ 標題底部 y=12+110=122，下方留 ≥14px，要點從 y≥136 開始
+    - 標題卡：translate(80,60)，width:1760，height:140，font-size:52px，bold
     - 要點卡片（每個要點獨立 .dg）：
-      要點1：translate(80,150)，width:830，height:170
-      要點2：translate(80,330)，width:830，height:170
-      要點3：translate(80,510)，width:830，height:170
-      要點4：translate(80,690)，width:830，height:170（最多4個）
-    - 右側裝飾：translate(960,150) 放 SVG 視覺元素`;
+      要點1：translate(80,240)，width:830，height:170
+      要點2：translate(80,430)，width:830，height:170
+      要點3：translate(80,620)，width:830，height:170
+      要點4：translate(80,810)，width:830，height:170（最多4個）
+    - 右側裝飾：translate(960,200) 放 SVG 視覺元素`;
   if (L === 'text_and_image') {
     const isReading = densityHint.includes('詳盡');
 
@@ -2816,15 +2798,13 @@ ${(()=>{
       const fontSize = bulletCount <= 3 ? 20  : bulletCount <= 4 ? 17  : 14;
       let bulletLayout = '';
       for (let bi = 0; bi < Math.min(bulletCount || 3, 6); bi++) {
-        const yPos = 150 + bi * (cardH + cardGap);
+        const yPos = 162 + bi * (cardH + cardGap);
         bulletLayout += `
-      要點${bi+1}：translate(60,${yPos})，width:1800，height:${cardH}，font-size:${fontSize}px`;
+      要點${bi+1}：translate(70,${yPos})，width:1780，height:${cardH}，font-size:${fontSize}px`;
       }
       return `  ★ text_and_image【無圖全版文字模式】— 本頁沒有圖片，請將文字佈滿整張投影片：
 
-    【ZONE 1 標題】translate(60,12)，width=1800，height=110，font-size:46px，bold
-      ⚠ 標題必須全寬（width:1800），靠左對齊：.rb div 加 style="text-align:left; padding-left:20px"
-      ⚠ 標題底部 y=122，下方留 ≥14px，要點從 y≥136 開始（建議 y=150）
+    【ZONE 1 標題】translate(70,28)，width=1780，height=130，font-size:46px，bold
 
     【ZONE 2 要點卡（全寬，每張獨立 .dg）】${bulletLayout}
       · 每卡 width 固定 1780（從 x=70 到 x=1850），禁止縮窄為 880 或留空白
@@ -2838,51 +2818,49 @@ ${(()=>{
     ? `  ★ text_and_image（閱讀密度）— 三層獨立結構，從上到下依序：
 
     【第 1 層：全寬標題（必須橫跨整個投影片寬度 1920px）】
-    ⚠ 標題 .dg 的 width 必須是 1800（translate(60,12) width:1800），絕對不能是 880 或其他小值
-    height:110，font-size:36~42px，bold，禁止在此層放圖片
-    ⚠ 標題 .rb div 加 style="text-align:left; padding-left:20px"（靠左，勿壓縮為兩行）
-    ⚠ 標題底部 y=12+110=122，下方留 ≥14px，內容從 y=146 開始
+    ⚠ 標題 .dg 的 width 必須是 1800（translate(60,25) width:1800），絕對不能是 880 或其他小值
+    height:125，font-size:36~42px，bold，禁止在此層放圖片
 
-    【第 2 層：主內容區（標題下方，y 從 146 開始）】
-    左側文字欄：translate(60,146)，width:1200（不得超過 1200）
-      - 要點1~8 各自獨立 .dg，font-size:13px，height:80~95px（文字量大時縮小字號）
+    【第 2 層：主內容區（標題下方，y 從 160 開始）】
+    左側文字欄：translate(60,160)，width:1200（不得超過 1200）
+      - 要點1~8 各自獨立 .dg，font-size:15px（最小不低於 14px），height:85~100px（文字量大時縮小字號至 13px）
       - 每個要點卡的實際高度必須確保所有卡片加總不超出可用空間
-      - 計算方式：可用高度 = 1060 - 146 = 914；每卡高度 = floor(914 / 要點數) - 10
+      - 計算方式：可用高度 = 1060 - 160 = 900；每卡高度 = floor(900 / 要點數) - 10
       - 文字嚴格在 width:1200 範圍內，超過換行不超出邊界
       - ⚠ 嚴格硬限制：最後一張要點卡的 translate Y + height ≤ 1060px
       - ⚠ 若 font-size 14px 導致超出，縮小至 12px 或 11px
     右側圖片（與文字欄垂直置中）：
-      - 圖片 Y 起點 = 146（與文字欄對齊），width:570
-      - 圖片 height = 所有文字卡片佔用的實際高度（最後卡的Y+H - 146），最大不超過 914px
-      - translate(1310,146)，height由實際文字區計算（確保圖片與文字上下邊緣對齊）
+      - 圖片 Y 起點 = 160（與文字欄對齊），width:570
+      - 圖片 height = 所有文字卡片佔用的實際高度（最後卡的Y+H - 160），最大不超過 900px
+      - translate(1310,160)，height由實際文字區計算（確保圖片與文字上下邊緣對齊）
       - preserveAspectRatio="xMidYMid meet"（保持比例，在範圍內置中）
       - ⚠ 圖片底部 translate Y + height ≤ 1060px
 
     【第 3 層：裝飾/頁腳（選用，y > 1060）】`
     : `  ★ text_and_image（圖文並排，有圖片）：
-    【三層設計原則】標題全寬靠左在最上方；左欄文字要點、右欄圖片並列於標題列以下
+    【鐵則】標題必須橫跨整張投影片最上方全寬；左欄文字、右欄圖片在標題以下並排
 
-    【ZONE 1 標題（全寬，必須橫跨整張投影片 1920px，不可壓縮）】
-      translate(60,12)，width:1800，height:110，font-size:44px，bold
-      ⚠ 標題 .rb div 必須加 style="text-align:left; padding-left:20px"（靠左對齊）
-      ⚠ 標題 width 必須是 1800，跨越左右兩欄，絕對不可縮短為 860 或 920
-      ⚠ font-size 最大 44px；若文字多改 36px，確保不換行壓縮為兩行
-      ⚠ 標題底部 y=12+110=122；下方必須留 ≥14px 間距，所有內容從 y=136 起
+    【ZONE 1 標題（⚠ 絕對全寬，禁止縮窄）】translate(60,12)，width:1800，height:110，bold
+      · ⛔ 標題 foreignObject width 必須是 1800，絕不能是 860、920 或任何 < 1400 的值
+      · ⛔ 標題 <g> 的 transform x 必須是 60，不能是 940 或其他右移值
+      · 若標題文字較長（>15字），font-size 從 44px 自動縮至 36px，確保一行顯示
+      · 若縮至 32px 仍需換行，允許標題佔 2 行，此時 height 改為 160，內容 y 從 180 起
+      · 標題 .rb div 加 style="text-align:left; padding-left:20px; white-space:normal;"
       · 副標題（若有）：translate(60,126)，width:1800，height:38，font-size:18px，opacity:0.75
 
-    【ZONE 2 左欄：文字要點（標題以下，y≥136）】x=60，從 y=146 開始，width:860
+    【ZONE 2 左欄：文字要點（標題列以下）】x=60，從 y=146 開始，width:860
       - 要點卡各自獨立 .dg，width:860，間距 8px
       - 要點數 N 決定每卡高度（確保總高度 + 146 ≤ 1070）：
-          N=2：h=446px,fs=19px；N=3：h=295px,fs=18px；N=4：h=216px,fs=16px
-          N=5：h=170px,fs=14px；N=6：h=140px,fs=13px；N≥7：h=115px,fs=11px
+          N=2：h=446px,fs=22px；N=3：h=295px,fs=20px；N=4：h=216px,fs=18px
+          N=5：h=170px,fs=16px；N=6：h=140px,fs=15px；N≥7：h=115px,fs=14px
       - 實際文字區底部 = 146 + N×(h+8) - 8（記錄此值，供圖片對齊使用）
       - ⚠ 硬限制：任何卡片 translate(x,Y) 的 Y + height ≤ 1070px
       - ⚠ .rb div 必須設 overflow:hidden（禁止 scrollbar）
 
-    【ZONE 2 右欄：圖片（與左欄文字區垂直對齊，必須低於標題）】
-      - ⚠ 圖片起始 Y = 146（與第一張文字卡對齊，且必須在標題底部 122+14 以下）
+    【ZONE 2 右欄：圖片（與左欄文字區垂直對齊）】
+      - 圖片起始 Y = 146（與第一張文字卡對齊）
       - 圖片結束 Y = 文字區實際底部（= 146 + N×(h+8) - 8）
-      - 圖片 height = 結束Y - 146（確保圖片與文字欄上下對齊）
+      - 圖片 height = 結束Y - 146（確保與文字欄上下完全對齊）
       - translate(940,146)，width:920，height:[根據上述計算]
       - ⚠ 圖片底部 ≤ 1070px，不超右緣（940+920=1860 ≤ 1920）
       - preserveAspectRatio="xMidYMid meet"（保持比例、置中顯示）
@@ -2893,25 +2871,21 @@ ${(()=>{
     - body 和 SVG 都設 overflow:hidden
     - 禁止使用 position:fixed 或讓 div 出現在 SVG 外部
     - 圖表（Chart.js/D3/Canvas）必須包在 <foreignObject> 內，foreignObject 有明確 width/height
-    ⚠⚠ 空白防護：輸出的 SVG 必須包含至少 3 個 <rect 或 <circle 等形狀，否則視為空白頁面
 
-    【標題（必須靠左，全寬）】translate(60,12)，width:1800，height:110，font-size:44px，bold
-      ⚠ 標題 .rb div 加 style="text-align:left; padding-left:20px"
-      ⚠ 標題底部 y=122，圖表內容從 y=146 開始（留 ≥14px 間距）
+    【標題】translate(60,25)，width:1800，height:120，font-size:44px
 
     【佈局方案 A — 流程節點（適合流程/架構）】
-    4節點水平排列，所有元素在 y=146~880 之間：
-      框1：x=60,y=146,w=380,h=240  → 文字：translate(70,156),width:360,height:220
-      框2：x=520,y=146,w=380,h=240 → 文字：translate(530,156),width:360,height:220
-      框3：x=980,y=146,w=380,h=240 → 文字：translate(990,156),width:360,height:220
-      框4：x=1440,y=146,w=380,h=240→ 文字：translate(1450,156),width:360,height:220
-      箭頭：SVG <path> + <marker> (marker-end)，必須實際渲染出來
-    說明卡（選用）：translate(60,436)，width:1800，height:400（不得超出 y=880）
-    ⚠ 4 個框必須同時存在，不可只畫 1~2 個（空框也要有內容文字）
+    4節點水平排列，所有元素不超出 y=880：
+      框1：x=60,y=200,w=380,h=220  → 文字：translate(70,210),width:360,height:200
+      框2：x=520,y=200,w=380,h=220 → 文字：translate(530,210),width:360,height:200
+      框3：x=980,y=200,w=380,h=220 → 文字：translate(990,210),width:360,height:200
+      框4：x=1440,y=200,w=380,h=220→ 文字：translate(1450,210),width:360,height:200
+      箭頭：SVG path + marker-end
+    說明卡（選用）：translate(60,470)，width:1800，height:380（不得超出 y=880）
 
     【佈局方案 B — 內嵌圖表（適合折線圖/柱狀圖）】
-    如需渲染 Chart.js 圖表，使用以下結構（必須有實際數據，不可空 datasets）：
-    <g class="dg" transform="translate(60,146)">
+    如需渲染 Chart.js 圖表，使用以下結構：
+    <g class="dg" transform="translate(60,150)">
       <foreignObject x="0" y="0" width="1800" height="780">
         <div xmlns="http://www.w3.org/1999/xhtml"
              style="width:1800px;height:780px;overflow:hidden;background:rgba(255,255,255,0.08);border-radius:12px;padding:20px;box-sizing:border-box;">
@@ -2921,8 +2895,7 @@ ${(()=>{
     </g>
     Chart.js 腳本放在 </svg> 後、<!--SLIDE_INTERACTION_SCRIPT--> 前，
     用 document.getElementById('myChart') 取得 canvas，
-    設 options.responsive:false，width/height 明確指定（≤1760,≤740）
-    ⚠ datasets 必須包含真實數字陣列，不可空陣列或佔位符`;
+    設 options.responsive:false，width/height 明確指定（≤1760,≤740）`;
   return `  ★ 使用 text_only 佈局作為預設（layout="${L}" 未定義，自動 fallback）`;
 })()}
 
@@ -3259,35 +3232,30 @@ function renderSlidePreviewCard(slideData, html, index) {
     const card = document.createElement('div');
     card.className = 'slide-preview-card bg-slate-900 border border-slate-800 rounded-xl overflow-hidden fade-in';
     card.style.animationDelay = `${Math.min(index * 50, 400)}ms`;
+    card.id = `slide-card-${index}`;
 
-    // Escape for srcdoc attribute
-    const escaped = html.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-
-    // 空白偵測：對 diagram_slide 特別標記
     const isBlank = isSlideBlank(html, slideData.layout);
-    const blankBadge = isBlank
-        ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 font-bold animate-pulse">⚠ 空白</span>`
-        : '';
+    const escaped = html.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 
     card.innerHTML = `
         <div class="slide-iframe-wrap" style="--ps:0.25;position:relative;">
             <iframe srcdoc="${escaped}" sandbox="allow-scripts" loading="lazy"></iframe>
-            ${isBlank ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);pointer-events:none;">
-                <span style="color:#f87171;font-size:13px;font-weight:700;letter-spacing:1px;">⚠ 空白頁面</span>
-            </div>` : ''}
+            ${isBlank ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);pointer-events:none;">
+                <span style="color:#f87171;font-size:14px;font-weight:700;">⚠ 空白頁面</span></div>` : ''}
         </div>
         <div class="px-3 py-2.5 flex items-start justify-between gap-2">
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 mb-1 flex-wrap">
                     <span class="text-[10px] font-bold text-violet-400">PAGE ${slideData.slide_number}</span>
                     <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${slideData.layout}</span>
-                    ${blankBadge}
+                    ${isBlank ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 font-bold">⚠空白</span>' : ''}
                 </div>
                 <p class="text-xs font-semibold text-slate-200 truncate">${slideData.title || '（無標題）'}</p>
             </div>
             <div class="flex gap-1.5 shrink-0">
                 <button onclick="regenSingleSlide(${index})" title="重新生成此頁"
-                    class="text-slate-500 hover:text-emerald-400 transition-colors p-1" id="regen-btn-${index}">
+                    id="regen-btn-${index}"
+                    class="text-slate-500 hover:text-emerald-400 transition-colors p-1">
                     <i class="ph-bold ph-arrow-clockwise text-base"></i>
                 </button>
                 <button onclick="openEditModal(${index})" title="編輯此頁"
@@ -3324,9 +3292,37 @@ function copySlideHTML(index) {
     navigator.clipboard.writeText(s.html).then(() => showToast(`✓ 第 ${s.slideNumber} 頁 HTML 已複製`));
 }
 
-// ── 重新生成單一投影片（含空白防護多次重試）───────────────────────────
+// ── 空白頁面偵測（精準版，避免誤報）────────────────────────────────────
+function isSlideBlank(html, layout) {
+    if (!html || typeof html !== 'string') return true;
+    // 極短一定是空白
+    if (html.length < 500) return true;
+    // 必須有基本 HTML 結構
+    const lower = html.toLowerCase();
+    if (!lower.includes('<svg')) return true;
+
+    // diagram_slide：需要有實際 SVG 形狀（rect/circle/path/polygon）或 canvas
+    if (layout === 'diagram_slide') {
+        const shapes = (html.match(/<(?:rect|circle|path|polygon|polyline|ellipse|line)[\s>]/gi) || []).length;
+        const hasCanvas = /<canvas[\s>]/i.test(html);
+        return shapes < 2 && !hasCanvas;
+    }
+
+    // title_only：有 SVG 且 HTML 夠長就算有內容
+    if (layout === 'title_only') {
+        return html.length < 1200;
+    }
+
+    // 其他版型（text_only, text_and_image）：
+    // 有 foreignObject 且 HTML 夠長即視為有內容
+    const hasFO = /<foreignObject/i.test(html);
+    if (!hasFO) return true;
+    return html.length < 1200;
+}
+
+// ── 重新生成單一投影片 ──────────────────────────────────────────────────
 async function regenSingleSlide(index) {
-    const entry = AppState.generatedSlides[index];
+    const entry = AppState.generatedSlides?.[index];
     if (!entry) return;
 
     const btn = document.getElementById(`regen-btn-${index}`);
@@ -3335,99 +3331,60 @@ async function regenSingleSlide(index) {
     const sData    = entry.slideData;
     const imageB64 = entry.imageB64 || null;
     const theme    = resolveActiveTheme ? resolveActiveTheme() : (AppState.activeTheme || {});
-    const layout   = sData.layout || 'text_only';
+    const layout   = sData?.layout || 'text_only';
     const maxTries = layout === 'diagram_slide' ? 4 : 3;
 
     addLog(`🔄 重新生成第 ${sData.slide_number} 頁（${layout}）...`, 'info');
     showToast(`🔄 重新生成第 ${sData.slide_number} 頁...`);
 
     let html = null;
-    for (let attempt = 1; attempt <= maxTries; attempt++) {
+    for (let i = 1; i <= maxTries; i++) {
         try {
-            html = await generateSlideHTML(sData, theme, imageB64);
-            if (!isSlideBlank(html, layout)) break;
-            addLog(`⚠ 第 ${sData.slide_number} 頁嘗試 ${attempt}/${maxTries} 仍空白，繼續重試...`, 'warning');
-            html = null;
+            const candidate = await generateSlideHTML(sData, theme, imageB64);
+            if (!isSlideBlank(candidate, layout)) { html = candidate; break; }
+            addLog(`⚠ 嘗試 ${i}/${maxTries} 仍偵測到空白，繼續重試...`, 'warning');
         } catch(e) {
-            addLog(`⚠ 第 ${sData.slide_number} 頁嘗試 ${attempt} 失敗：${e.message}`, 'warning');
-            html = null;
+            addLog(`⚠ 嘗試 ${i} 失敗：${e.message}`, 'warning');
         }
     }
-
-    if (!html || isSlideBlank(html, layout)) {
+    if (!html) {
         addLog(`⚠ 達最大重試次數，改用備用模板`, 'warning');
         html = buildFallbackSlideHTML(sData, theme);
     }
 
-    // 後處理（與主生成流程一致）
-    if (typeof enforceLayoutSafety === 'function')      html = enforceLayoutSafety(html);
-    if (typeof programmaticContrastFix === 'function')  html = programmaticContrastFix(html, theme);
-    if (typeof cleanSlideArtifacts === 'function')      html = cleanSlideArtifacts(html);
+    // 後處理（與主流程一致）
+    if (typeof enforceLayoutSafety === 'function') html = enforceLayoutSafety(html);
+    if (typeof programmaticContrastFix === 'function') html = programmaticContrastFix(html, theme);
+    if (typeof cleanSlideArtifacts === 'function') html = cleanSlideArtifacts(html);
     if (imageB64) html = html.replace(/REPLACE_IMAGE_SRC/g, imageB64);
     if (AppState.bgTemplateBase64) html = html.replace(/REPLACE_BG_SRC/g, AppState.bgTemplateBase64);
     if (AppState.logoBase64) {
         const pos = document.getElementById('sel-logo-pos')?.value || 'TR';
-        const ps  = {TR:'right:40px;top:30px;',TL:'left:40px;top:30px;',BR:'right:40px;bottom:30px;',BL:'left:40px;bottom:30px;'};
+        const ps = {TR:'right:40px;top:30px;',TL:'left:40px;top:30px;',BR:'right:40px;bottom:30px;',BL:'left:40px;bottom:30px;'};
         const tag = `<img id="slide-logo" src="${AppState.logoBase64}" style="position:absolute;${ps[pos]||ps.TR}height:60px;max-width:200px;object-fit:contain;z-index:9999;opacity:0.9;pointer-events:none;">`;
         if (!html.includes('slide-logo')) html = html.replace('</body>', tag + '\n</body>');
     }
 
-    // 更新 AppState 並重繪卡片
     AppState.generatedSlides[index].html = html;
-    const grid  = document.getElementById('slides-preview-grid');
-    const cards = Array.from(grid.querySelectorAll('.slide-preview-card'));
-    if (cards[index]) {
-        const oldCard = cards[index];
+
+    // 更新卡片
+    const oldCard = document.getElementById(`slide-card-${index}`);
+    if (oldCard) {
+        const tempDiv = document.createElement('div');
+        const grid = document.getElementById('slides-preview-grid');
+        // 暫存插入位置
+        const nextSibling = oldCard.nextSibling;
+        oldCard.remove();
         renderSlidePreviewCard(sData, html, index);
         const newCard = grid.lastElementChild;
-        grid.insertBefore(newCard, oldCard);
-        oldCard.remove();
+        if (nextSibling) grid.insertBefore(newCard, nextSibling);
     } else {
         renderSlidePreviewCard(sData, html, index);
     }
 
     const ok = !isSlideBlank(html, layout);
-    addLog(ok ? `✅ 第 ${sData.slide_number} 頁重新生成完成` : `⚠ 第 ${sData.slide_number} 頁仍為備用模板`, ok ? 'success' : 'warning');
-    showToast(ok ? `✅ 第 ${sData.slide_number} 頁已更新` : `⚠ 第 ${sData.slide_number} 頁使用備用模板`);
-}
-
-// ── 快速設定一鍵套用 ───────────────────────────────────────────────────
-function quickGenerate() {
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-
-    // 文字模型 / 配圖模型
-    set('sel-text-model', 'gemini-2.5-pro');
-    if (typeof updateHeaderBadge === 'function') updateHeaderBadge();
-    set('sel-img-model', 'grok-imagine-image-pro');
-
-    // 底色：現代極簡
-    if (typeof setBgMode === 'function') setBgMode('preset');
-    set('sel-template', 'modern');
-    if (typeof updateThemePreview === 'function') updateThemePreview();
-
-    // 圖片插入模式：僅流程圖
-    set('sel-image-mode', 'diagram_auto');
-    if (typeof updateImageModeHint === 'function') updateImageModeHint();
-
-    // 視覺品質審查：關閉
-    const review = document.getElementById('chk-review-enabled');
-    if (review) { review.checked = false; if (typeof updateReviewHint === 'function') updateReviewHint(); }
-
-    // 文字密度：閱讀（3）
-    const density = document.getElementById('range-text-density');
-    if (density) { density.value = '3'; density.dispatchEvent(new Event('input')); }
-
-    // 純圖模式：背景圖 LLM → Grok Imagine Image
-    set('sel-bg-gen-model', 'grok-imagine-image');
-
-    // 排版 LLM：Gemini 2.5 Pro
-    set('sel-layout-model', 'gemini-2.5-pro');
-
-    // Google 聯網搜尋：關閉
-    const ws = document.getElementById('chk-web-search');
-    if (ws) { ws.checked = false; if (typeof updateWsPanel === 'function') updateWsPanel(); }
-
-    showToast('⚡ 快速設定已套用，可直接生成簡報');
+    addLog(ok ? `✅ 第 ${sData.slide_number} 頁重新生成完成` : `⚠ 第 ${sData.slide_number} 頁仍使用備用模板`, ok ? 'success' : 'warning');
+    showToast(ok ? `✅ 第 ${sData.slide_number} 頁已更新` : `⚠ 已套用備用模板`);
 }
 
 function previewAllSlides() {
@@ -3760,44 +3717,6 @@ function buildLogoTag() {
     const pos = document.getElementById('sel-logo-pos')?.value || 'TR';
     const posStyles = { TR:'right:40px;top:30px;', TL:'left:40px;top:30px;', BR:'right:40px;bottom:30px;', BL:'left:40px;bottom:30px;' };
     return `<img id="slide-logo" src="${AppState.logoBase64}" style="position:absolute;${posStyles[pos]||posStyles.TR}height:60px;max-width:200px;object-fit:contain;z-index:999;opacity:0.9;pointer-events:none;">`;
-}
-
-// ── 空白/無效投影片偵測 ─────────────────────────────────────────────
-function isSlideBlank(html, layout) {
-    if (!html || typeof html !== 'string') return true;
-    if (html.length < 600) return true;
-    const lower = html.toLowerCase();
-    if (!lower.includes('<!doctype') && !lower.includes('<html')) return true;
-    if (!/<svg[\s>]/i.test(html)) return true;
-
-    // diagram_slide 需要更嚴格檢查：必須有真實 SVG 形狀或 Chart.js canvas
-    if (layout === 'diagram_slide') {
-        const shapeCount = (html.match(/<(?:rect|circle|path|polygon|polyline|ellipse|line)[\s>]/gi) || []).length;
-        const hasCanvas  = /<canvas[\s>]/i.test(html);
-        const hasFO      = /<foreignObject/i.test(html);
-        // 至少要有 3 個形狀，或有 canvas（圖表）
-        if (shapeCount < 3 && !hasCanvas) return true;
-        // 有 foreignObject 但完全沒文字內容也算空白
-        if (hasFO) {
-            const stripped = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim();
-            if (stripped.length < 50) return true;
-        }
-        return false;
-    }
-
-    // 一般頁面：必須有 foreignObject 且有 contenteditable 內容
-    const hasFO = /<foreignObject/i.test(html);
-    const hasSvgText = /<text[\s>]/i.test(html);
-    if (!hasFO && !hasSvgText) return true;
-    if (hasFO && !/contenteditable/i.test(html)) return true;
-
-    // 提取 foreignObject 內的純文字，確保有實際內容
-    if (hasFO) {
-        const foBlocks = html.match(/<foreignObject[\s\S]*?<\/foreignObject>/gi) || [];
-        const combined = foBlocks.join(' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim();
-        if (combined.length < 20) return true;
-    }
-    return false;
 }
 
 function buildFallbackSlideHTML(slideData, theme) {
@@ -5931,24 +5850,34 @@ function enforceLayoutSafety(html) {
     // Strip img alt attributes to prevent alt text rendering as visible text on slide
     html = html.replace(/ alt="[^"]*"/g, ' alt=""');
     html = html.replace(/ alt='[^']*'/g, " alt=''");
+
+    // ── 強制標題列全寬（修正 LLM 將標題縮在左欄造成換行）─────────────────
+    // 找到 Y ≤ 50 的 .dg 元素，若其 foreignObject width < 1400 → 強制改為 1800
+    html = html.replace(
+        /(transform="translate\(\s*[\d.]+\s*,\s*(?:\d|[12]\d|[3-4]\d|50)\s*\)"[\s\S]{0,200}?<foreignObject[^>]*\s)width="(\d+)"/,
+        (m, pre, w) => parseInt(w) < 1400 ? pre + 'width="1800"' : m
+    );
+    // 同步修正標題 transform x 值過大（避免標題起點在右側）
+    html = html.replace(
+        /(class="dg"[^>]*transform="translate\()\s*([3-9]\d{2,}|[1-9]\d{3,})\s*(,\s*(?:\d|[12]\d|[3-4]\d|50)\s*\))/g,
+        (m, pre, x, post) => parseInt(x) > 200 ? pre + '60' + post : m
+    );
+
     const safeCss = `<style id="layout-safety">
 /* ── Zone-level overflow guard ── */
 html { overflow: hidden !important; width: 1920px !important; height: 1080px !important; }
 body {
     overflow: hidden !important;
-    position: relative !important;        /* REQUIRED: makes absolute-positioned logo work */
+    position: relative !important;
     width: 1920px !important; height: 1080px !important;
     max-width: 1920px !important; max-height: 1080px !important;
     box-sizing: border-box !important;
-    /* Hard clip — nothing escapes the 1920×1080 canvas */
     clip-path: inset(0 0 0 0) !important;
 }
-/* ── SVG root: must clip overflow (SVG default is visible!) ── */
 svg#slide-svg, svg:first-of-type {
     overflow: hidden !important;
     display: block !important;
 }
-/* ── All draggable / resizable boxes ── */
 .rb, g.dg > foreignObject > div {
     overflow: hidden !important;
     box-sizing: border-box !important;
@@ -5956,7 +5885,6 @@ svg#slide-svg, svg:first-of-type {
     overflow-wrap: break-word !important;
     white-space: normal !important;
 }
-/* ── Everything inside a box ── */
 .rb *, g.dg > foreignObject > div * {
     max-width: 100% !important;
     word-wrap: break-word !important;
@@ -5964,7 +5892,6 @@ svg#slide-svg, svg:first-of-type {
     white-space: normal !important;
     box-sizing: border-box !important;
 }
-/* ── Logo: HTML <img> fallback only — SVG <image> uses x/y SVG attributes ── */
 img#slide-logo, img#slide-logo-html {
     position: absolute !important;
     z-index: 99999 !important;
@@ -5973,17 +5900,20 @@ img#slide-logo, img#slide-logo-html {
     max-width: 200px !important;
     height: 60px !important;
 }
-/* ── Prevent inner images from stretching container ── */
 .rb img, g.dg > foreignObject > div img {
     max-width: 100% !important; max-height: 100% !important; object-fit: contain !important;
 }
 canvas { max-width: 100% !important; max-height: 100% !important; display: block; }
 [contenteditable] { overflow: hidden !important; word-break: break-word !important; }
-/* ── Hard prohibit scrollbars anywhere on the slide ── */
 * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
 *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-/* ── Clamp foreignObject content height ── */
 foreignObject div, foreignObject .rb { max-height: 100% !important; overflow: hidden !important; }
+/* ── 字型大小下限：防止文字過小 ── */
+g.dg > foreignObject > div p,
+g.dg > foreignObject > div li,
+g.dg > foreignObject > div span:not(.badge):not(.tag) {
+    font-size: max(var(--fs, 14px), 14px) !important;
+}
 </style>`;
     try {
         // Inject safety CSS
@@ -6308,25 +6238,20 @@ async function startGeneration() {
                 addLog(`⚠ 第 ${sData.slide_number} 頁配圖略過`, 'warning');
             }
 
-            // ── Phase 3: Generate slide HTML with blank-page protection ──
             let html;
             const maxHtmlRetries = sData.layout === 'diagram_slide' ? 4 : 2;
-            let htmlRetryCount = 0;
+            let htmlRetries = 0;
             while (true) {
                 try {
-                    if (htmlRetryCount > 0) {
-                        addLog(`🔄 第 ${sData.slide_number} 頁第 ${htmlRetryCount} 次重試（${sData.layout}）...`, 'warning');
-                    }
+                    if (htmlRetries > 0) addLog(`🔄 第 ${sData.slide_number} 頁空白重試 ${htmlRetries}/${maxHtmlRetries}...`, 'warning');
                     html = await generateSlideHTML(sData, theme, imageB64);
                     if (!isSlideBlank(html, sData.layout)) {
                         addLog(`✓ 第 ${sData.slide_number} 頁 HTML 生成完成`, 'success');
                         break;
                     }
-                    // Blank detected
-                    htmlRetryCount++;
-                    addLog(`⚠ 第 ${sData.slide_number} 頁偵測到空白/不完整（${sData.layout}），重試 ${htmlRetryCount}/${maxHtmlRetries}...`, 'warning');
-                    if (htmlRetryCount >= maxHtmlRetries) {
-                        addLog(`⚠ 第 ${sData.slide_number} 頁重試 ${maxHtmlRetries} 次後仍空白，改用備用模板`, 'warning');
+                    htmlRetries++;
+                    if (htmlRetries >= maxHtmlRetries) {
+                        addLog(`⚠ 第 ${sData.slide_number} 頁重試${maxHtmlRetries}次後仍空白，使用備用模板`, 'warning');
                         html = buildFallbackSlideHTML(sData, theme);
                         break;
                     }
