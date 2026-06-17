@@ -11476,7 +11476,13 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
                     renderMessages();
 
                     // 二輪呼叫：把技能結果回饋給 AI，要求生成最終回覆
-                    const _followUpPrompt = `【系統】你剛剛呼叫了本地技能「${_skillReq.name}」，執行結果如下：\n${_skillResultText}\n\n請根據此結果，用自然語言回覆使用者原本的問題（不要再輸出 skill_call JSON，也不要提及「技能」、「JSON」等技術名詞，直接給出結果）。`;
+                    // ★ 修正：原本的指令只說「根據結果回覆」，沒有禁止 AI 自行編造。
+                    //   若技能執行失敗（回傳「錯誤：...」等字樣），AI 有時會忽略這個事實，
+                    //   反而依據使用者原本的問題自行幻想出一份「看起來成功」的內容
+                    //   （例如自己編造投影片大綱並宣稱「已生成完畢」，但實際上檔案從未產生）。
+                    //   明確禁止這種行為，要求誠實回報實際執行結果。
+                    const _skillLooksLikeError = /^(錯誤|失敗|技能執行失敗|Error)/i.test(_skillResultText.trim());
+                    const _followUpPrompt = `【系統】你剛剛呼叫了本地技能「${_skillReq.name}」，實際執行結果如下（這是唯一真實的執行結果，請勿自行編造或想像任何技能未回傳的內容）：\n${_skillResultText}\n\n【強制規定】：\n1. 你的回覆【只能】基於上方「實際執行結果」的內容，絕對禁止自行編造執行結果中沒有提到的細節（例如：技能只回傳「成功」兩字，你就不能自己幻想出投影片有哪幾頁、內容是什麼）。\n2. ${_skillLooksLikeError ? '上方結果明顯是錯誤訊息，你【必須】誠實告知使用者執行失敗，並簡要說明原因（用自然語言轉述，不要照抄技術錯誤碼），絕對不可以假裝成功或宣稱已產生任何檔案。' : '若結果顯示成功，可以用自然語言告知使用者；但不要添加任何結果中未提及的具體內容細節。'}\n3. 不要再輸出 skill_call JSON，也不要提及「技能」「JSON」等技術名詞，直接給出對使用者有意義的回覆。`;
                     try {
                         const _followUpRes = await fetchAIResponse(_followUpPrompt, modelToUse, { enableSearch: false, disableSearch: true, files: [] });
                         finalOutputText = typeof _followUpRes === 'string' ? _followUpRes : (_followUpRes.text || _skillResultText);
