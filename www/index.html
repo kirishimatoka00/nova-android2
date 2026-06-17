@@ -6647,6 +6647,12 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                 if (entry) openImgPreview(entry.data, entry.name);
             };
 
+            // ★ 修正：原本此函式無論成功失敗都不回傳任何資訊（void），呼叫端
+            //   （尤其是自訂技能）完全無法得知實際結果，只能假設「沒拋例外=成功」。
+            //   但函式內部用自己的 try/catch 把所有錯誤都吞掉、從不向外拋出，
+            //   導致呼叫端的 await 永遠正常結束，即使檔案實際上存檔失敗、
+            //   或只是悄悄存進使用者看不到的 App 私有資料夾，呼叫端也會誤判為成功。
+            //   現在統一回傳 { success, method, path } 讓呼叫端可以查證真實結果。
             window.downloadDataUriFile = async function(dataUri, filename) {
                 try {
                     const CapFS = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
@@ -6698,6 +6704,8 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         //   Fallback：若 Share 不可用，寫到 DOCUMENTS（app 私有）並提示路徑
                         let _finalUri = null;
                         let _saved = false;
+                        let _resultMethod = 'failed';
+                        let _resultDetail = '';
 
                         // 先寫入 CACHE（app 一定有權限）
                         try {
@@ -6710,6 +6718,11 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                             _finalUri = cacheResult.uri;
                         } catch(cacheErr) {
                             console.error('[NOVA] 寫入 CACHE 失敗:', cacheErr);
+                            _resultDetail = 'CACHE 寫入失敗: ' + cacheErr.message;
+                        }
+
+                        if (_finalUri && !CapShare) {
+                            console.warn('[downloadDataUriFile] Share plugin 不存在，直接 fallback 寫入 DOCUMENTS');
                         }
 
                         if (_finalUri && CapShare) {
@@ -6719,23 +6732,28 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                                 await CapShare.share({
                                     title: _safeName,
                                     files: [_finalUri],
-                                    dialogTitle: '儲存圖片至相簿或其他位置'
+                                    dialogTitle: '儲存檔案至相簿或其他位置'
                                 });
                                 console.log('[downloadDataUriFile] CapShare.share() 已完成');
                                 _saved = true;
+                                _resultMethod = 'share';
+                                _resultDetail = `已透過分享視窗送出：${_safeName}`;
                             } catch(shareErr) {
                                 // 使用者按取消也算成功（檔案仍在 CACHE 可找到）
                                 if (shareErr && shareErr.message && /cancel/i.test(shareErr.message)) {
                                     _saved = true;
-                                    if(typeof showToast === 'function') showToast(`⚠️ 已取消，圖片暫存於 App 快取：${_safeName}`);
+                                    _resultMethod = 'cache_only';
+                                    _resultDetail = `使用者取消分享，檔案暫存於 App 快取：${_safeName}（重啟App可能被清除，建議改用設定頁的匯出功能）`;
+                                    if(typeof showToast === 'function') showToast(`⚠️ 已取消，檔案暫存於 App 快取：${_safeName}`);
                                 } else {
                                     console.warn('[NOVA] Share 失敗，嘗試 fallback 寫 DOCUMENTS:', shareErr);
+                                    _resultDetail = 'Share 失敗: ' + (shareErr && shareErr.message);
                                 }
                             }
                         }
 
                         if (!_saved) {
-                            // Fallback：Share 不可用或失敗 → 寫到 DOCUMENTS（app 私有）
+                            // Fallback：Share 不可用或失敗 → 寫到 DOCUMENTS（app 私有，使用者無法直接從檔案管理員看到）
                             try {
                                 const docResult = await CapFS.writeFile({
                                     path: `NOVA_Images/${_safeName}`,
@@ -6745,15 +6763,21 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                                 });
                                 _finalUri = docResult.uri;
                                 _saved = true;
+                                _resultMethod = 'documents';
+                                _resultDetail = `已儲存至 App 私有資料夾 Documents/NOVA_Images/${_safeName}（一般檔案管理員看不到此位置，可在設定頁使用對應的匯出功能取出）`;
                                 if(typeof showToast === 'function') showToast(`✅ 已儲存至 Documents/NOVA_Images/${_safeName}（App 私有目錄）`);
                             } catch(docErr) {
-                                console.error('[NOVA] 圖片寫入 DOCUMENTS 也失敗:', docErr);
-                                if(typeof showToast === 'function') showToast('❌ 圖片儲存失敗：' + docErr.message);
+                                console.error('[NOVA] 寫入 DOCUMENTS 也失敗:', docErr);
+                                _resultMethod = 'failed';
+                                _resultDetail = (_resultDetail ? _resultDetail + '；' : '') + 'DOCUMENTS 寫入也失敗: ' + docErr.message;
+                                if(typeof showToast === 'function') showToast('❌ 檔案儲存失敗：' + docErr.message);
                             }
-                        } else if (_finalUri && CapShare) {
+                        } else if (_resultMethod === 'share') {
                             // Share 成功（使用者操作完成）
-                            if(typeof showToast === 'function') showToast(`✅ 圖片已傳送：${_safeName}`);
+                            if(typeof showToast === 'function') showToast(`✅ 檔案已傳送：${_safeName}`);
                         }
+
+                        return { success: _saved, method: _resultMethod, detail: _resultDetail, uri: _finalUri };
                     } else {
                         // 桌面瀏覽器 fallback
                         const blob = base64ToBlob(dataUri);
@@ -6766,10 +6790,12 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         a.click();
                         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 2000);
                         if(typeof showToast === 'function') showToast(`✅ 已開始下載：${filename}`);
+                        return { success: true, method: 'browser', detail: `已開始下載：${filename}` };
                     }
                 } catch(e) {
                     if(typeof showToast === 'function') showToast('❌ 下載失敗：' + e.message, 8000);
                     else alert('下載失敗：' + e.message);
+                    return { success: false, method: 'failed', detail: e.message };
                 }
             };
 
