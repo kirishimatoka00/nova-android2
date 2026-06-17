@@ -11510,7 +11510,7 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
                     const _skillLooksLikeError = /^(錯誤|失敗|技能執行失敗|Error)/i.test(_skillResultText.trim());
                     const _followUpPrompt = `【系統】你剛剛呼叫了本地技能「${_skillReq.name}」，實際執行結果如下（這是唯一真實的執行結果，請勿自行編造或想像任何技能未回傳的內容）：\n${_skillResultText}\n\n【強制規定】：\n1. 你的回覆【只能】基於上方「實際執行結果」的內容，絕對禁止自行編造執行結果中沒有提到的細節（例如：技能只回傳「成功」兩字，你就不能自己幻想出投影片有哪幾頁、內容是什麼）。\n2. ${_skillLooksLikeError ? '上方結果明顯是錯誤訊息，你【必須】誠實告知使用者執行失敗，並簡要說明原因（用自然語言轉述，不要照抄技術錯誤碼），絕對不可以假裝成功或宣稱已產生任何檔案。' : '若結果顯示成功，可以用自然語言告知使用者；但不要添加任何結果中未提及的具體內容細節。'}\n3. 不要再輸出 skill_call JSON，也不要提及「技能」「JSON」等技術名詞，直接給出對使用者有意義的回覆。`;
                     try {
-                        const _followUpRes = await fetchAIResponse(_followUpPrompt, modelToUse, { enableSearch: false, disableSearch: true, files: [] });
+                        const _followUpRes = await fetchAIResponse(_followUpPrompt, modelToUse, { enableSearch: false, disableSearch: true, files: [], isSkillFollowup: true });
                         finalOutputText = typeof _followUpRes === 'string' ? _followUpRes : (_followUpRes.text || _skillResultText);
                     } catch(e) {
                         finalOutputText = _skillResultText;
@@ -11697,7 +11697,14 @@ if (appState.pendingAnalyzeContextId) {
             // ★ 「製作簡報/生成PPT/產生投影片」等措辭含「生成/製作」動詞，
             //   可能被 _imgTestF 或輕量分類器誤判為圖片生成意圖，
             //   導致跳出解析度/比例選擇器。PPT 意圖具最高優先權，強制排除。
-            let isImageIntent = !_intentHints.isPPTIntent && (_isImageModelSelected || _imgTestF(finalPrompt.trim()) || _intentHints.isImageGen);
+            // ★ 修正：skill_call 二輪呼叫（讓 AI 把技能執行結果轉述給使用者）會把
+            //   「技能執行結果文字」當作 userText 傳進來重新跑一次 fetchAIResponse，
+            //   這段系統生成的結果文字（例如「已成功生成...投影片標題...」）若恰好
+            //   同時命中 _imgTestF 的「生成/製作」+「圖片類名詞」組合，就會被誤判為
+            //   圖片生成請求，導致整個回覆被劫持去跑圖片模型，而非單純轉述文字結果。
+            //   skill_call 的二輪呼叫永遠只是「把結果轉述給使用者」，不應該被任何
+            //   意圖分類器重新解讀，故在此明確排除。
+            let isImageIntent = !options.isSkillFollowup && !_intentHints.isPPTIntent && (_isImageModelSelected || _imgTestF(finalPrompt.trim()) || _intentHints.isImageGen);
 
             if (!_isImageModelSelected && _intentHints.isImageGen && _intentHints.refinedImagePrompt && _intentHints.refinedImagePrompt.trim()) {
                 finalPrompt = _intentHints.refinedImagePrompt.trim();
