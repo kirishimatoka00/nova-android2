@@ -6647,6 +6647,11 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                 if (entry) openImgPreview(entry.data, entry.name);
             };
 
+            // ★ 修正：原函式完全沒有 return 任何值（純 void），導致呼叫端
+            //   （技能腳本）拿到的永遠是 undefined，於是「無論實際存檔成功還是
+            //   失敗」都被誤判為失敗——這正是「檔案明明已經存進 NOVA_Images，
+            //   AI 卻還是回報儲存錯誤」的根本原因。現在統一回傳
+            //   { success, method, detail } 讓呼叫端能依據真實結果判斷。
             window.downloadDataUriFile = async function(dataUri, filename) {
                 try {
                     const CapFS = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
@@ -6698,6 +6703,8 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         //   Fallback：若 Share 不可用，寫到 DOCUMENTS（app 私有）並提示路徑
                         let _finalUri = null;
                         let _saved = false;
+                        let _resultMethod = 'failed';
+                        let _resultDetail = '';
 
                         // 先寫入 CACHE（app 一定有權限）
                         try {
@@ -6710,6 +6717,7 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                             _finalUri = cacheResult.uri;
                         } catch(cacheErr) {
                             console.error('[NOVA] 寫入 CACHE 失敗:', cacheErr);
+                            _resultDetail = 'CACHE 寫入失敗: ' + cacheErr.message;
                         }
 
                         if (_finalUri && CapShare) {
@@ -6723,13 +6731,18 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                                 });
                                 console.log('[downloadDataUriFile] CapShare.share() 已完成');
                                 _saved = true;
+                                _resultMethod = 'share';
+                                _resultDetail = `已透過分享視窗送出：${_safeName}`;
                             } catch(shareErr) {
                                 // 使用者按取消也算成功（檔案仍在 CACHE 可找到）
                                 if (shareErr && shareErr.message && /cancel/i.test(shareErr.message)) {
                                     _saved = true;
+                                    _resultMethod = 'cache_only';
+                                    _resultDetail = `使用者取消分享，檔案暫存於 App 快取：${_safeName}`;
                                     if(typeof showToast === 'function') showToast(`⚠️ 已取消，圖片暫存於 App 快取：${_safeName}`);
                                 } else {
                                     console.warn('[NOVA] Share 失敗，嘗試 fallback 寫 DOCUMENTS:', shareErr);
+                                    _resultDetail = 'Share 失敗: ' + (shareErr && shareErr.message);
                                 }
                             }
                         }
@@ -6745,15 +6758,21 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                                 });
                                 _finalUri = docResult.uri;
                                 _saved = true;
+                                _resultMethod = 'documents';
+                                _resultDetail = `已儲存至 Documents/NOVA_Images/${_safeName}（App 私有目錄，一般檔案管理員看不到，需透過 App 內對應的匯出功能取出）`;
                                 if(typeof showToast === 'function') showToast(`✅ 已儲存至 Documents/NOVA_Images/${_safeName}（App 私有目錄）`);
                             } catch(docErr) {
                                 console.error('[NOVA] 圖片寫入 DOCUMENTS 也失敗:', docErr);
+                                _resultMethod = 'failed';
+                                _resultDetail = (_resultDetail ? _resultDetail + '；' : '') + 'DOCUMENTS 寫入也失敗: ' + docErr.message;
                                 if(typeof showToast === 'function') showToast('❌ 圖片儲存失敗：' + docErr.message);
                             }
-                        } else if (_finalUri && CapShare) {
+                        } else if (_resultMethod === 'share') {
                             // Share 成功（使用者操作完成）
                             if(typeof showToast === 'function') showToast(`✅ 圖片已傳送：${_safeName}`);
                         }
+
+                        return { success: _saved, method: _resultMethod, detail: _resultDetail, uri: _finalUri };
                     } else {
                         // 桌面瀏覽器 fallback
                         const blob = base64ToBlob(dataUri);
@@ -6766,10 +6785,12 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         a.click();
                         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 2000);
                         if(typeof showToast === 'function') showToast(`✅ 已開始下載：${filename}`);
+                        return { success: true, method: 'browser', detail: `已開始下載：${filename}` };
                     }
                 } catch(e) {
                     if(typeof showToast === 'function') showToast('❌ 下載失敗：' + e.message, 8000);
                     else alert('下載失敗：' + e.message);
+                    return { success: false, method: 'failed', detail: e.message };
                 }
             };
 
