@@ -163,59 +163,22 @@
     <!-- SIDEBAR -->
     <aside class="lg:w-80 xl:w-96 flex flex-col gap-4 shrink-0">
 
-        <!-- Attached Sources -->
-
+        <!-- ── 模型設定（統一區域） ── -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-            <button onclick="togglePanel('panel-sources')" class="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition-colors">
+            <button onclick="togglePanel('panel-models')" class="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition-colors">
                 <div class="flex items-center gap-2.5">
-                    <i class="ph-fill ph-paperclip text-sky-400"></i>
-                    <span class="text-sm font-semibold text-white">附加資料來源</span>
-                    <span id="source-count-badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span>
+                    <i class="ph-fill ph-cpu text-violet-400"></i>
+                    <span class="text-sm font-semibold text-white">模型設定</span>
                 </div>
-                <i id="panel-sources-icon" class="ph-bold ph-caret-down text-slate-400 transition-transform rotate-180"></i>
+                <i id="panel-models-icon" class="ph-bold ph-caret-down text-slate-400 transition-transform rotate-180"></i>
             </button>
-            <div id="panel-sources" class="panel-body open">
+            <div id="panel-models" class="panel-body open">
                 <div class="px-4 pb-4 space-y-3 text-xs">
-                    <!-- File Drop Zone -->
-                    <div id="file-drop-zone" class="drop-zone rounded-xl p-4 text-center cursor-pointer select-none"
-                        onclick="document.getElementById('file-input').click()"
-                        ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)">
-                        <i class="ph-bold ph-upload-simple text-slate-500 text-2xl mb-1.5 block"></i>
-                        <p class="text-slate-400 font-medium">拖曳或點擊上傳</p>
-                        <p class="text-slate-600 mt-1">TXT · PDF · DOCX · XLSX · PPTX · CSV</p>
-                        <input type="file" id="file-input" multiple accept=".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv" class="hidden" onchange="handleFileSelect(event)">
-                    </div>
-                    <!-- URL Input -->
-                    <div class="flex gap-2">
-                        <input type="text" id="url-input" placeholder="貼入網頁連結或 YouTube URL..."
-                            class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-[11px] outline-none focus:border-sky-500 transition-colors"
-                            onkeydown="if(event.key==='Enter')addURLSource()">
-                        <button onclick="addURLSource()" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-3 py-2 rounded-xl transition-colors shrink-0">
-                            <i class="ph-bold ph-plus"></i>
-                        </button>
-                    </div>
-                    <!-- Sources List -->
-                    <div id="sources-list" class="space-y-2 max-h-52 overflow-y-auto"></div>
-                    <p id="no-sources-hint" class="text-slate-600 text-center py-2">尚未附加任何資料來源</p>
-                </div>
-            </div>
-        </div>
 
-        <!-- Advanced Config -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-            <button onclick="togglePanel('panel-config')" class="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition-colors">
-                <div class="flex items-center gap-2.5">
-                    <i class="ph-fill ph-sliders-horizontal text-amber-400"></i>
-                    <span class="text-sm font-semibold text-white">進階設定</span>
-                </div>
-                <i id="panel-config-icon" class="ph-bold ph-caret-down text-slate-400 transition-transform rotate-180"></i>
-            </button>
-            <div id="panel-config" class="panel-body open">
-                <div class="px-4 pb-4 space-y-4 text-xs">
-
+                    <!-- 首選文字模型 -->
                     <div>
                         <label class="block text-slate-400 mb-1.5 font-semibold">首選文字模型 (LLM)</label>
-                        <select id="sel-text-model" onchange="updateHeaderBadge()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-amber-500 outline-none">
+                        <select id="sel-text-model" onchange="updateHeaderBadge()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-violet-500 outline-none">
                             <optgroup label="── Gemini 系列 ──">
                                 <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (最新旗艦)</option>
                                 <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (最新快速)</option>
@@ -230,19 +193,84 @@
                         </select>
                     </div>
 
+                    <!-- 首選配圖模型 -->
                     <div>
                         <label class="block text-slate-400 mb-1.5 font-semibold">首選配圖模型 (Image)</label>
-                        <select id="sel-img-model" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-amber-500 outline-none">
+                        <select id="sel-img-model" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-violet-500 outline-none">
                             <option value="grok-imagine-image-pro">Grok Imagine Image Pro (推薦)</option>
                             <option value="grok-imagine-image">Grok Imagine Image</option>
                             <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash Image</option>
                             <option value="gemini-2.5-flash-image">Gemini 2.5 Flash Image</option>
                         </select>
-                        <p class="text-slate-500 mt-1">若失敗會自動依序降級調用其他模型</p>
+                        <p class="text-slate-600 mt-1">若失敗會自動依序降級調用其他模型</p>
                     </div>
 
+                    <!-- 背景圖 LLM -->
+                    <div>
+                        <label class="block text-slate-400 mb-1.5 font-semibold">背景圖 LLM</label>
+                        <select id="sel-bg-gen-model" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-violet-500 outline-none">
+                            <option value="imagen-4.0-generate-001">Imagen 4.0 Standard（推薦）</option>
+                            <option value="imagen-4.0-ultra-generate-001">Imagen 4.0 Ultra（最高品質）</option>
+                            <option value="imagen-4.0-fast-generate-001">Imagen 4.0 Fast（最快速）</option>
+                            <option value="grok-imagine-image-pro">Grok Imagine Image Pro</option>
+                            <option value="grok-imagine-image">Grok Imagine Image</option>
+                            <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash-Image</option>
+                            <option value="gemini-2.5-flash-image">Gemini 2.5 Flash-Image</option>
+                        </select>
+                    </div>
+
+                    <!-- 排版 LLM -->
+                    <div>
+                        <label class="block text-slate-400 mb-1.5 font-semibold">排版 LLM</label>
+                        <select id="sel-layout-model" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-violet-500 outline-none">
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro（最佳排版）</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash（快速）</option>
+                            <option value="grok-4-1-fast-reasoning">Grok 4.1 Fast</option>
+                        </select>
+                        <p class="text-[9px] text-slate-600 mt-1 leading-relaxed">文字模型→大綱內容；背景圖 LLM→視覺背景；排版 LLM→文字合成輸出</p>
+                    </div>
+
+                    <!-- Google 聯網搜尋 -->
+                    <div class="border-t border-slate-800 pt-3 flex items-center gap-2.5">
+                        <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" id="chk-web-search" class="sr-only peer" checked>
+                            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+                        </label>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <i class="ph-fill ph-globe text-sky-400 text-sm"></i>
+                                <span class="text-[11px] text-slate-200 font-semibold">Google 聯網搜尋（Grounding）</span>
+                            </div>
+                            <div id="web-search-mode-panel" class="mt-1.5 space-y-1">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="web-search-mode" id="wsm-auto" value="auto" checked class="accent-sky-400">
+                                    <span class="text-[10px] text-slate-300">AI 自動選取搜尋結果</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="web-search-mode" id="wsm-manual" value="manual" class="accent-sky-400">
+                                    <span class="text-[10px] text-slate-300">手動勾選搜尋結果（顯示 20 項）</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ── 進階設定 ── -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <button onclick="togglePanel('panel-config')" class="w-full flex items-center justify-between p-4 hover:bg-slate-800/50 transition-colors">
+                <div class="flex items-center gap-2.5">
+                    <i class="ph-fill ph-sliders-horizontal text-amber-400"></i>
+                    <span class="text-sm font-semibold text-white">進階設定</span>
+                </div>
+                <i id="panel-config-icon" class="ph-bold ph-caret-down text-slate-400 transition-transform"></i>
+            </button>
+            <div id="panel-config" class="panel-body">
+                <div class="px-4 pb-4 space-y-4 text-xs">
+
                     <div class="border-t border-slate-800 pt-3">
-                        <label class="block text-slate-400 mb-2 font-semibold flex items-center gap-1.5">
                             <i class="ph-fill ph-paint-bucket text-amber-400"></i>
                             投影片底色設計
                         </label>
@@ -333,7 +361,6 @@
                         <select id="sel-image-mode" onchange="updateImageModeHint()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-amber-500 outline-none">
                             <optgroup label="── AI 生成 ──">
                                 <option value="auto">🤖 自動判斷（AI 決定哪頁需要圖片）</option>
-                                <option value="diagram_auto">🤖 自動判斷（不插入網路圖片，只插入需要的流程圖）</option>
                                 <option value="all">🤖 強制每張都插入 AI 生成圖片</option>
                                 <option value="none">🚫 不插入圖片（純 HTML/CSS）</option>
                             </optgroup>
@@ -469,80 +496,61 @@
 
     </aside>
 
-    <!-- MAIN CONTENT -->
+    <!-- ── MAIN CONTENT ── -->
     <div class="flex-1 min-w-0 flex flex-col gap-5">
 
-        <!-- Topic Input -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-            <label class="block text-sm font-semibold text-white mb-3">
-                <i class="ph-fill ph-pencil-simple-line text-violet-400 mr-1"></i>簡報主題 / 指令
-            </label>
-            <!-- ── Output Mode Switch ── -->
-            <div class="mb-3 bg-slate-950 rounded-xl p-1 flex gap-1">
-                <button id="btn-quick-generate" onclick="quickGenerate()"
-                    class="flex-1 py-2 rounded-lg text-[11px] font-bold transition-all bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 flex items-center justify-center gap-1.5">
-                    <i class="ph-fill ph-lightning"></i> 快速生成
-                </button>
-                <button id="omode-btn-image" onclick="setOutputMode('image')"
-                    class="flex-1 py-2 rounded-lg text-[11px] font-bold transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5">
-                    <i class="ph-fill ph-image-square"></i> 純圖輸出 PPT
-                </button>
+        <!-- Topic + Data Source (merged top card) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+
+            <!-- 附加資料來源 (collapsible) -->
+            <button onclick="togglePanel('panel-sources-main')" class="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/50 transition-colors border-b border-slate-800/60">
+                <div class="flex items-center gap-2.5">
+                    <i class="ph-fill ph-paperclip text-sky-400"></i>
+                    <span class="text-sm font-semibold text-white">附加資料來源</span>
+                    <span id="source-count-badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span>
+                </div>
+                <i id="panel-sources-main-icon" class="ph-bold ph-caret-down text-slate-400 transition-transform rotate-180"></i>
+            </button>
+            <div id="panel-sources-main" class="panel-body open">
+                <div class="px-5 pt-3 pb-2 space-y-3 text-xs">
+                    <div id="file-drop-zone" class="drop-zone rounded-xl p-4 text-center cursor-pointer select-none"
+                        onclick="document.getElementById('file-input').click()"
+                        ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)">
+                        <i class="ph-bold ph-upload-simple text-slate-500 text-2xl mb-1.5 block"></i>
+                        <p class="text-slate-400 font-medium">拖曳或點擊上傳</p>
+                        <p class="text-slate-600 mt-1">TXT · PDF · DOCX · XLSX · PPTX · CSV</p>
+                        <input type="file" id="file-input" multiple accept=".txt,.md,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv" class="hidden" onchange="handleFileSelect(event)">
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="url-input" placeholder="貼入網頁連結或 YouTube URL..."
+                            class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-[11px] outline-none focus:border-sky-500 transition-colors"
+                            onkeydown="if(event.key==='Enter')addURLSource()">
+                        <button onclick="addURLSource()" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-3 py-2 rounded-xl transition-colors shrink-0">
+                            <i class="ph-bold ph-plus"></i>
+                        </button>
+                    </div>
+                    <div id="sources-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                    <p id="no-sources-hint" class="text-slate-600 text-center py-1">尚未附加任何資料來源</p>
+                </div>
             </div>
 
-            <!-- Pure Image mode extra model selectors -->
-            <div id="pureimage-models" class="hidden mb-3 bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
-                <p class="text-[10px] text-slate-400 font-semibold mb-1">純圖模式模型配置</p>
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] text-slate-400 w-20 shrink-0">背景圖 LLM</span>
-                    <select id="sel-bg-gen-model" class="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 text-[11px] focus:border-violet-500 outline-none">
-                        <option value="imagen-4.0-generate-001">Imagen 4.0 Standard（推薦）</option>
-                        <option value="imagen-4.0-ultra-generate-001">Imagen 4.0 Ultra（最高品質）</option>
-                        <option value="imagen-4.0-fast-generate-001">Imagen 4.0 Fast（最快速）</option>
-                        <option value="grok-imagine-image-pro">Grok Imagine Image Pro</option>
-                        <option value="grok-imagine-image">Grok Imagine Image</option>
-                        <option value="gemini-3.1-flash-image-preview">Gemini 3.1 Flash-Image</option>
-                        <option value="gemini-2.5-flash-image">Gemini 2.5 Flash-Image</option>
-                    </select>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] text-slate-400 w-20 shrink-0">排版 LLM</span>
-                    <select id="sel-layout-model" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 text-[11px] focus:border-violet-500 outline-none">
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro（最佳排版）</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash（快速）</option>
-                        <option value="grok-4-1-fast-reasoning">Grok 4.1 Fast</option>
-                    </select>
-                </div>
-                <p class="text-[9px] text-slate-600 leading-relaxed">內容/大綱 LLM 沿用上方「文字模型」設定。三個 LLM 分工：內容 → 背景視覺 → 文字排版合成，最終以不可編輯圖片輸出。</p>
-            </div>
-
-            <textarea id="inp-topic" rows="4"
-                placeholder="例如：請幫我生成一份深入探討「2025 AI 發展趨勢」的專業報告，需包含大量數據、具體案例與未來預測...&#10;&#10;也可附加左側資料來源，AI 會先摘要分析後製作簡報。"
-                class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-slate-200 focus:border-violet-500 outline-none transition-colors resize-none"></textarea>
-            <!-- Web Search Grounding toggle -->
-            <div class="mt-3 flex items-center gap-2.5 bg-slate-800/60 border border-slate-700 rounded-xl px-3.5 py-2.5">
-                <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" id="chk-web-search" class="sr-only peer" checked>
-                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+            <!-- Topic textarea -->
+            <div class="px-5 pt-4 pb-4">
+                <label class="block text-sm font-semibold text-white mb-3">
+                    <i class="ph-fill ph-pencil-simple-line text-violet-400 mr-1"></i>簡報主題 / 指令
                 </label>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5">
-                        <i class="ph-fill ph-globe text-sky-400 text-sm"></i>
-                        <span class="text-[11px] text-slate-200 font-semibold">Google 聯網搜尋（Grounding）</span>
-                    </div>
-                    <!-- Web search mode selector — only shown when toggle is on -->
-                    <div id="web-search-mode-panel" class="mt-1.5 space-y-1">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="web-search-mode" id="wsm-auto" value="auto" checked class="accent-sky-400">
-                            <span class="text-[10px] text-slate-300">AI 自動選取搜尋結果</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="web-search-mode" id="wsm-manual" value="manual" class="accent-sky-400">
-                            <span class="text-[10px] text-slate-300">手動勾選搜尋結果（顯示 20 項）</span>
-                        </label>
-                    </div>
+                <!-- Pure image mode indicator -->
+                <div class="mb-3 flex items-center gap-2">
+                    <span id="omode-btn-image" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-sky-500/25 text-sky-300 border border-sky-500/30">
+                        <i class="ph-fill ph-image-square"></i> 純圖輸出 PPT
+                    </span>
+                    <span class="text-[10px] text-slate-500">AI 生成高解析圖片投影片，可一鍵轉為 PPTX</span>
                 </div>
+
+                <textarea id="inp-topic" rows="4"
+                    placeholder="例如：請幫我生成一份深入探討「2025 AI 發展趨勢」的專業報告，需包含大量數據、具體案例與未來預測...&#10;&#10;也可附加上方資料來源，AI 會先摘要分析後製作簡報。"
+                    class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-sm text-slate-200 focus:border-violet-500 outline-none transition-colors resize-none"></textarea>
             </div>
-            <!-- Dynamic editing mode toggle -->
         </div>
 
         <!-- Progress -->
@@ -1024,65 +1032,13 @@ function updateDensityLabel(v) {
 }
 
 // ─── Output Mode ──────────────────────────────────────────────────
-AppState.outputMode   = 'html';     // 'html' | 'image'
+AppState.outputMode   = 'image';    // 固定純圖模式
 AppState.bgDesignMode = 'preset';   // 'preset' | 'ai' | 'custom'
 AppState.customTheme  = null;
 
 function setOutputMode(mode) {
-    AppState.outputMode = mode;
-    // 只切換純圖按鈕高亮（html 模式按鈕已移除，改為快速生成按鈕）
-    const imgBtn = document.getElementById('omode-btn-image');
-    if (imgBtn) imgBtn.className = `flex-1 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 ${
-        mode === 'image' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400 hover:text-slate-200'
-    }`;
-    const piPanel = document.getElementById('pureimage-models');
-    if (piPanel) piPanel.classList.toggle('hidden', mode !== 'image');
-}
-
-// ── 快速設定一鍵套用 ───────────────────────────────────────────────────
-function quickGenerate() {
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-
-    // 首選文字模型: Gemini 2.5 Pro
-    set('sel-text-model', 'gemini-2.5-pro');
-    if (typeof updateHeaderBadge === 'function') updateHeaderBadge();
-
-    // 首選配圖模型: Grok Imagine Image Pro
-    set('sel-img-model', 'grok-imagine-image-pro');
-
-    // 投影片底色: 現代極簡
-    if (typeof setBgMode === 'function') setBgMode('preset');
-    set('sel-template', 'modern');
-    if (typeof updateThemePreview === 'function') updateThemePreview();
-
-    // AI 圖片插入模式: 自動判斷（不插入網路圖片，只插入需要的流程圖）
-    set('sel-image-mode', 'diagram_auto');
-    if (typeof updateImageModeHint === 'function') updateImageModeHint();
-
-    // 視覺品質審查: 關閉
-    const review = document.getElementById('chk-review-enabled');
-    if (review) { review.checked = false; if (typeof updateReviewHint === 'function') updateReviewHint(); }
-
-    // 投影片文字密度: 閱讀 (value=3)
-    const density = document.getElementById('range-text-density');
-    if (density) { density.value = '3'; if (typeof updateDensityLabel === 'function') updateDensityLabel('3'); }
-
-    // 投影片數量: 依目前設定（不動）
-
-    // 純圖模式圖形配置 — 背景圖 LLM: Grok Imagine Image
-    set('sel-bg-gen-model', 'grok-imagine-image');
-
-    // 排版 LLM: Gemini 2.5 Pro
-    set('sel-layout-model', 'gemini-2.5-pro');
-
-    // Google 聯網搜尋: 關閉
-    const ws = document.getElementById('chk-web-search');
-    if (ws) { ws.checked = false; if (typeof updateWsPanel === 'function') updateWsPanel(); }
-
-    // 輸出格式：純圖輸出 PPT（與純圖輸出 PPT 按鈕相同）
-    setOutputMode('image');
-
-    showToast('⚡ 快速設定已套用！可直接輸入主題開始生成');
+    // 固定為純圖模式，不再支援 html 模式切換
+    AppState.outputMode = 'image';
 }
 
 // ─── Pure Image PPT: Imagen-3 Background Generator ────────────────
@@ -1608,7 +1564,7 @@ function updateWsPanel() {
 document.addEventListener('DOMContentLoaded', function() {
     updateThemePreview();
     setBgMode('preset');
-    setOutputMode('html');
+    AppState.outputMode = 'image';   // 固定純圖模式
     updateWsPanel();
     updateReviewHint();
     document.getElementById('chk-web-search')?.addEventListener('change', updateWsPanel);
@@ -2867,7 +2823,7 @@ ${(()=>{
 
     【第 2 層：主內容區（標題下方，y 從 160 開始）】
     左側文字欄：translate(60,160)，width:1200（不得超過 1200）
-      - 要點1~8 各自獨立 .dg，font-size:15px（最小不低於 14px），height:85~100px（文字量大時縮小字號至 13px）
+      - 要點1~8 各自獨立 .dg，font-size:13px，height:80~95px（文字量大時縮小字號）
       - 每個要點卡的實際高度必須確保所有卡片加總不超出可用空間
       - 計算方式：可用高度 = 1060 - 160 = 900；每卡高度 = floor(900 / 要點數) - 10
       - 文字嚴格在 width:1200 範圍內，超過換行不超出邊界
@@ -2882,33 +2838,30 @@ ${(()=>{
 
     【第 3 層：裝飾/頁腳（選用，y > 1060）】`
     : `  ★ text_and_image（圖文並排，有圖片）：
-    【鐵則】標題必須橫跨整張投影片最上方全寬；左欄文字、右欄圖片在標題以下並排
+    【三層設計原則】標題橫跨全寬在最上方；左欄文字要點、右欄圖片並列於標題列以下
 
-    【ZONE 1 標題（⚠ 絕對全寬，禁止縮窄）】translate(60,12)，width:1800，height:110，bold
-      · ⛔ 標題 foreignObject width 必須是 1800，絕不能是 860、920 或任何 < 1400 的值
-      · ⛔ 標題 <g> 的 transform x 必須是 60，不能是 940 或其他右移值
-      · 若標題文字較長（>15字），font-size 從 44px 自動縮至 36px，確保一行顯示
-      · 若縮至 32px 仍需換行，允許標題佔 2 行，此時 height 改為 160，內容 y 從 180 起
-      · 標題 .rb div 加 style="text-align:left; padding-left:20px; white-space:normal;"
-      · 副標題（若有）：translate(60,126)，width:1800，height:38，font-size:18px，opacity:0.75
+    【ZONE 1 標題（全寬，最多 1~2 行）】translate(60,20)，width:1800，height:130，font-size:44px，bold
+      · 標題必須跨越整張投影片全寬（不可限縮在左欄）
+      · font-size 最大 44px；標題超過 2 行時縮小至 36px
+      · 副標題（若有）：translate(60,158)，width:1800，height:40，font-size:18px，opacity:0.75
 
-    【ZONE 2 左欄：文字要點（標題列以下）】x=60，從 y=146 開始，width:860
+    【ZONE 2 左欄：文字要點（標題列以下）】x=60，從 y=205 開始，width:860
       - 要點卡各自獨立 .dg，width:860，間距 8px
-      - 要點數 N 決定每卡高度（確保總高度 + 146 ≤ 1070）：
-          N=2：h=446px,fs=22px；N=3：h=295px,fs=20px；N=4：h=216px,fs=18px
-          N=5：h=170px,fs=16px；N=6：h=140px,fs=15px；N≥7：h=115px,fs=14px
-      - 實際文字區底部 = 146 + N×(h+8) - 8（記錄此值，供圖片對齊使用）
+      - 要點數 N 決定每卡高度（確保總高度 + 205 ≤ 1070）：
+          N=2：h=420px,fs=19px；N=3：h=273px,fs=18px；N=4：h=202px,fs=16px
+          N=5：h=160px,fs=14px；N=6：h=132px,fs=13px；N≥7：h=112px,fs=11px
+      - 實際文字區底部 = 205 + N×(h+8) - 8（記錄此值，供圖片對齊使用）
       - ⚠ 硬限制：任何卡片 translate(x,Y) 的 Y + height ≤ 1070px
       - ⚠ .rb div 必須設 overflow:hidden（禁止 scrollbar）
 
-    【ZONE 2 右欄：圖片（與左欄文字區垂直對齊）】
-      - 圖片起始 Y = 146（與第一張文字卡對齊）
-      - 圖片結束 Y = 文字區實際底部（= 146 + N×(h+8) - 8）
-      - 圖片 height = 結束Y - 146（確保與文字欄上下完全對齊）
-      - translate(940,146)，width:920，height:[根據上述計算]
+    【ZONE 2 右欄：圖片（與左欄文字區垂直置中對齊）】
+      - 圖片起始 Y = 205（與第一張文字卡對齊）
+      - 圖片結束 Y = 文字區實際底部（= 205 + N×(h+8) - 8）
+      - 圖片 height = 結束Y - 205（確保與文字欄上下完全對齊，實現垂直置中）
+      - translate(940,205)，width:920，height:[根據上述計算]
       - ⚠ 圖片底部 ≤ 1070px，不超右緣（940+920=1860 ≤ 1920）
       - preserveAspectRatio="xMidYMid meet"（保持比例、置中顯示）
-      - 語法：<g class="dg" transform="translate(940,146)"><image href="REPLACE_IMAGE_SRC" width="920" height="[計算值]" preserveAspectRatio="xMidYMid meet"/></g>`;
+      - 語法：<g class="dg" transform="translate(940,205)"><image href="REPLACE_IMAGE_SRC" width="920" height="[計算值]" preserveAspectRatio="xMidYMid meet"/></g>`;
   }
   if (L === 'diagram_slide') return `  ★ diagram_slide（流程圖/架構圖/圖表）：
     ⚠ 所有內容必須嚴格在 1920×1080px 範圍內，禁止任何溢出：
@@ -3276,32 +3229,23 @@ function renderSlidePreviewCard(slideData, html, index) {
     const card = document.createElement('div');
     card.className = 'slide-preview-card bg-slate-900 border border-slate-800 rounded-xl overflow-hidden fade-in';
     card.style.animationDelay = `${Math.min(index * 50, 400)}ms`;
-    card.id = `slide-card-${index}`;
 
-    const isBlank = isSlideBlank(html, slideData.layout);
+    // Escape for srcdoc attribute
     const escaped = html.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 
     card.innerHTML = `
-        <div class="slide-iframe-wrap" style="--ps:0.25;position:relative;">
+        <div class="slide-iframe-wrap" style="--ps:0.25">
             <iframe srcdoc="${escaped}" sandbox="allow-scripts" loading="lazy"></iframe>
-            ${isBlank ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);pointer-events:none;">
-                <span style="color:#f87171;font-size:14px;font-weight:700;">⚠ 空白頁面</span></div>` : ''}
         </div>
         <div class="px-3 py-2.5 flex items-start justify-between gap-2">
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                <div class="flex items-center gap-1.5 mb-1">
                     <span class="text-[10px] font-bold text-violet-400">PAGE ${slideData.slide_number}</span>
                     <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${slideData.layout}</span>
-                    ${isBlank ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-400 font-bold">⚠空白</span>' : ''}
                 </div>
                 <p class="text-xs font-semibold text-slate-200 truncate">${slideData.title || '（無標題）'}</p>
             </div>
             <div class="flex gap-1.5 shrink-0">
-                <button onclick="regenSingleSlide(${index})" title="重新生成此頁"
-                    id="regen-btn-${index}"
-                    class="text-slate-500 hover:text-emerald-400 transition-colors p-1">
-                    <i class="ph-bold ph-arrow-clockwise text-base"></i>
-                </button>
                 <button onclick="openEditModal(${index})" title="編輯此頁"
                     class="text-slate-500 hover:text-amber-400 transition-colors p-1">
                     <i class="ph-bold ph-pencil-simple text-base"></i>
@@ -3334,101 +3278,6 @@ function copySlideHTML(index) {
     const s = AppState.generatedSlides[index];
     if (!s) return;
     navigator.clipboard.writeText(s.html).then(() => showToast(`✓ 第 ${s.slideNumber} 頁 HTML 已複製`));
-}
-
-// ── 空白頁面偵測（精準版，避免誤報）────────────────────────────────────
-function isSlideBlank(html, layout) {
-    if (!html || typeof html !== 'string') return true;
-    // 極短一定是空白
-    if (html.length < 500) return true;
-    // 必須有基本 HTML 結構
-    const lower = html.toLowerCase();
-    if (!lower.includes('<svg')) return true;
-
-    // diagram_slide：需要有實際 SVG 形狀（rect/circle/path/polygon）或 canvas
-    if (layout === 'diagram_slide') {
-        const shapes = (html.match(/<(?:rect|circle|path|polygon|polyline|ellipse|line)[\s>]/gi) || []).length;
-        const hasCanvas = /<canvas[\s>]/i.test(html);
-        return shapes < 2 && !hasCanvas;
-    }
-
-    // title_only：有 SVG 且 HTML 夠長就算有內容
-    if (layout === 'title_only') {
-        return html.length < 1200;
-    }
-
-    // 其他版型（text_only, text_and_image）：
-    // 有 foreignObject 且 HTML 夠長即視為有內容
-    const hasFO = /<foreignObject/i.test(html);
-    if (!hasFO) return true;
-    return html.length < 1200;
-}
-
-// ── 重新生成單一投影片 ──────────────────────────────────────────────────
-async function regenSingleSlide(index) {
-    const entry = AppState.generatedSlides?.[index];
-    if (!entry) return;
-
-    const btn = document.getElementById(`regen-btn-${index}`);
-    if (btn) { btn.disabled = true; btn.querySelector('i').className = 'ph-bold ph-spinner text-base animate-spin'; }
-
-    const sData    = entry.slideData;
-    const imageB64 = entry.imageB64 || null;
-    const theme    = resolveActiveTheme ? resolveActiveTheme() : (AppState.activeTheme || {});
-    const layout   = sData?.layout || 'text_only';
-    const maxTries = layout === 'diagram_slide' ? 4 : 3;
-
-    addLog(`🔄 重新生成第 ${sData.slide_number} 頁（${layout}）...`, 'info');
-    showToast(`🔄 重新生成第 ${sData.slide_number} 頁...`);
-
-    let html = null;
-    for (let i = 1; i <= maxTries; i++) {
-        try {
-            const candidate = await generateSlideHTML(sData, theme, imageB64);
-            if (!isSlideBlank(candidate, layout)) { html = candidate; break; }
-            addLog(`⚠ 嘗試 ${i}/${maxTries} 仍偵測到空白，繼續重試...`, 'warning');
-        } catch(e) {
-            addLog(`⚠ 嘗試 ${i} 失敗：${e.message}`, 'warning');
-        }
-    }
-    if (!html) {
-        addLog(`⚠ 達最大重試次數，改用備用模板`, 'warning');
-        html = buildFallbackSlideHTML(sData, theme);
-    }
-
-    // 後處理（與主流程一致）
-    if (typeof enforceLayoutSafety === 'function') html = enforceLayoutSafety(html);
-    if (typeof programmaticContrastFix === 'function') html = programmaticContrastFix(html, theme);
-    if (typeof cleanSlideArtifacts === 'function') html = cleanSlideArtifacts(html);
-    if (imageB64) html = html.replace(/REPLACE_IMAGE_SRC/g, imageB64);
-    if (AppState.bgTemplateBase64) html = html.replace(/REPLACE_BG_SRC/g, AppState.bgTemplateBase64);
-    if (AppState.logoBase64) {
-        const pos = document.getElementById('sel-logo-pos')?.value || 'TR';
-        const ps = {TR:'right:40px;top:30px;',TL:'left:40px;top:30px;',BR:'right:40px;bottom:30px;',BL:'left:40px;bottom:30px;'};
-        const tag = `<img id="slide-logo" src="${AppState.logoBase64}" style="position:absolute;${ps[pos]||ps.TR}height:60px;max-width:200px;object-fit:contain;z-index:9999;opacity:0.9;pointer-events:none;">`;
-        if (!html.includes('slide-logo')) html = html.replace('</body>', tag + '\n</body>');
-    }
-
-    AppState.generatedSlides[index].html = html;
-
-    // 更新卡片
-    const oldCard = document.getElementById(`slide-card-${index}`);
-    if (oldCard) {
-        const tempDiv = document.createElement('div');
-        const grid = document.getElementById('slides-preview-grid');
-        // 暫存插入位置
-        const nextSibling = oldCard.nextSibling;
-        oldCard.remove();
-        renderSlidePreviewCard(sData, html, index);
-        const newCard = grid.lastElementChild;
-        if (nextSibling) grid.insertBefore(newCard, nextSibling);
-    } else {
-        renderSlidePreviewCard(sData, html, index);
-    }
-
-    const ok = !isSlideBlank(html, layout);
-    addLog(ok ? `✅ 第 ${sData.slide_number} 頁重新生成完成` : `⚠ 第 ${sData.slide_number} 頁仍使用備用模板`, ok ? 'success' : 'warning');
-    showToast(ok ? `✅ 第 ${sData.slide_number} 頁已更新` : `⚠ 已套用備用模板`);
 }
 
 function previewAllSlides() {
@@ -5185,7 +5034,7 @@ function imgPickerCancel() {
 async function getSlideImage(sData, imageMode, slideIndex) {
     const wantsImage = sData.layout === 'text_and_image';
     const forceAI    = imageMode === 'all' && !['title_only','diagram_slide'].includes(sData.layout);
-    const noImage    = imageMode === 'none' || imageMode === 'diagram_auto';
+    const noImage    = imageMode === 'none';
 
     if (noImage) return null;
 
@@ -5894,34 +5743,24 @@ function enforceLayoutSafety(html) {
     // Strip img alt attributes to prevent alt text rendering as visible text on slide
     html = html.replace(/ alt="[^"]*"/g, ' alt=""');
     html = html.replace(/ alt='[^']*'/g, " alt=''");
-
-    // ── 強制標題列全寬（修正 LLM 將標題縮在左欄造成換行）─────────────────
-    // 找到 Y ≤ 50 的 .dg 元素，若其 foreignObject width < 1400 → 強制改為 1800
-    html = html.replace(
-        /(transform="translate\(\s*[\d.]+\s*,\s*(?:\d|[12]\d|[3-4]\d|50)\s*\)"[\s\S]{0,200}?<foreignObject[^>]*\s)width="(\d+)"/,
-        (m, pre, w) => parseInt(w) < 1400 ? pre + 'width="1800"' : m
-    );
-    // 同步修正標題 transform x 值過大（避免標題起點在右側）
-    html = html.replace(
-        /(class="dg"[^>]*transform="translate\()\s*([3-9]\d{2,}|[1-9]\d{3,})\s*(,\s*(?:\d|[12]\d|[3-4]\d|50)\s*\))/g,
-        (m, pre, x, post) => parseInt(x) > 200 ? pre + '60' + post : m
-    );
-
     const safeCss = `<style id="layout-safety">
 /* ── Zone-level overflow guard ── */
 html { overflow: hidden !important; width: 1920px !important; height: 1080px !important; }
 body {
     overflow: hidden !important;
-    position: relative !important;
+    position: relative !important;        /* REQUIRED: makes absolute-positioned logo work */
     width: 1920px !important; height: 1080px !important;
     max-width: 1920px !important; max-height: 1080px !important;
     box-sizing: border-box !important;
+    /* Hard clip — nothing escapes the 1920×1080 canvas */
     clip-path: inset(0 0 0 0) !important;
 }
+/* ── SVG root: must clip overflow (SVG default is visible!) ── */
 svg#slide-svg, svg:first-of-type {
     overflow: hidden !important;
     display: block !important;
 }
+/* ── All draggable / resizable boxes ── */
 .rb, g.dg > foreignObject > div {
     overflow: hidden !important;
     box-sizing: border-box !important;
@@ -5929,6 +5768,7 @@ svg#slide-svg, svg:first-of-type {
     overflow-wrap: break-word !important;
     white-space: normal !important;
 }
+/* ── Everything inside a box ── */
 .rb *, g.dg > foreignObject > div * {
     max-width: 100% !important;
     word-wrap: break-word !important;
@@ -5936,6 +5776,7 @@ svg#slide-svg, svg:first-of-type {
     white-space: normal !important;
     box-sizing: border-box !important;
 }
+/* ── Logo: HTML <img> fallback only — SVG <image> uses x/y SVG attributes ── */
 img#slide-logo, img#slide-logo-html {
     position: absolute !important;
     z-index: 99999 !important;
@@ -5944,20 +5785,17 @@ img#slide-logo, img#slide-logo-html {
     max-width: 200px !important;
     height: 60px !important;
 }
+/* ── Prevent inner images from stretching container ── */
 .rb img, g.dg > foreignObject > div img {
     max-width: 100% !important; max-height: 100% !important; object-fit: contain !important;
 }
 canvas { max-width: 100% !important; max-height: 100% !important; display: block; }
 [contenteditable] { overflow: hidden !important; word-break: break-word !important; }
+/* ── Hard prohibit scrollbars anywhere on the slide ── */
 * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
 *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+/* ── Clamp foreignObject content height ── */
 foreignObject div, foreignObject .rb { max-height: 100% !important; overflow: hidden !important; }
-/* ── 字型大小下限：防止文字過小 ── */
-g.dg > foreignObject > div p,
-g.dg > foreignObject > div li,
-g.dg > foreignObject > div span:not(.badge):not(.tag) {
-    font-size: max(var(--fs, 14px), 14px) !important;
-}
 </style>`;
     try {
         // Inject safety CSS
@@ -6283,28 +6121,13 @@ async function startGeneration() {
             }
 
             let html;
-            const maxHtmlRetries = sData.layout === 'diagram_slide' ? 4 : 2;
-            let htmlRetries = 0;
-            while (true) {
-                try {
-                    if (htmlRetries > 0) addLog(`🔄 第 ${sData.slide_number} 頁空白重試 ${htmlRetries}/${maxHtmlRetries}...`, 'warning');
-                    html = await generateSlideHTML(sData, theme, imageB64);
-                    if (!isSlideBlank(html, sData.layout)) {
-                        addLog(`✓ 第 ${sData.slide_number} 頁 HTML 生成完成`, 'success');
-                        break;
-                    }
-                    htmlRetries++;
-                    if (htmlRetries >= maxHtmlRetries) {
-                        addLog(`⚠ 第 ${sData.slide_number} 頁重試${maxHtmlRetries}次後仍空白，使用備用模板`, 'warning');
-                        html = buildFallbackSlideHTML(sData, theme);
-                        break;
-                    }
-                } catch(e) {
-                    if (e.message === 'CanceledByUser') throw e;
-                    addLog(`⚠ 第 ${sData.slide_number} 頁 HTML 生成失敗，使用備用模板`, 'warning');
-                    html = buildFallbackSlideHTML(sData, theme);
-                    break;
-                }
+            try {
+                html = await generateSlideHTML(sData, theme, imageB64);
+                addLog(`✓ 第 ${sData.slide_number} 頁 HTML 生成完成`, 'success');
+            } catch(e) {
+                if (e.message === 'CanceledByUser') throw e;
+                addLog(`⚠ 第 ${sData.slide_number} 頁 HTML 生成失敗，使用備用模板`, 'warning');
+                html = buildFallbackSlideHTML(sData, theme);
             }
 
             // ── Phase 4a: Layout safety — inject overflow:hidden on all containers ──
@@ -6734,7 +6557,7 @@ async function runSlideEdit() {
 </div>
 
 <!-- ── pgPrompt Modal ──────────────────────────────────────── -->
-<div id="pg-prompt-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(2,6,23,0.88);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;">
+<div id="pg-prompt-modal" style="display:none;position:fixed;inset:0;z-index:200000;background:rgba(2,6,23,0.88);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;">
   <div style="background:#1e293b;border:1px solid #475569;border-radius:16px;padding:24px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:16px;">
     <p id="pg-prompt-msg" style="color:#e2e8f0;font-size:14px;line-height:1.6;white-space:pre-line;"></p>
     <textarea id="pg-prompt-input" rows="3" style="width:100%;padding:10px 12px;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#e2e8f0;font-size:13px;resize:vertical;outline:none;box-sizing:border-box;-webkit-user-select:text;user-select:text;" placeholder="請在此輸入..."></textarea>
