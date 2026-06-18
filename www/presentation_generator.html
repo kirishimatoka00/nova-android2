@@ -333,6 +333,7 @@
                         <select id="sel-image-mode" onchange="updateImageModeHint()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-amber-500 outline-none">
                             <optgroup label="── AI 生成 ──">
                                 <option value="auto">🤖 自動判斷（AI 決定哪頁需要圖片）</option>
+                                <option value="diagram_auto">🤖 自動判斷（不插入網路圖片，只插入需要的流程圖）</option>
                                 <option value="all">🤖 強制每張都插入 AI 生成圖片</option>
                                 <option value="none">🚫 不插入圖片（純 HTML/CSS）</option>
                             </optgroup>
@@ -478,9 +479,9 @@
             </label>
             <!-- ── Output Mode Switch ── -->
             <div class="mb-3 bg-slate-950 rounded-xl p-1 flex gap-1">
-                <button id="omode-btn-html" onclick="setOutputMode('html')"
-                    class="flex-1 py-2 rounded-lg text-[11px] font-bold transition-all bg-violet-500/25 text-violet-300 flex items-center justify-center gap-1.5">
-                    <i class="ph-fill ph-code"></i> HTML/CSS 輸出 PPT
+                <button id="btn-quick-generate" onclick="quickGenerate()"
+                    class="flex-1 py-2 rounded-lg text-[11px] font-bold transition-all bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 flex items-center justify-center gap-1.5">
+                    <i class="ph-fill ph-lightning"></i> 快速生成
                 </button>
                 <button id="omode-btn-image" onclick="setOutputMode('image')"
                     class="flex-1 py-2 rounded-lg text-[11px] font-bold transition-all text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5">
@@ -1029,16 +1030,59 @@ AppState.customTheme  = null;
 
 function setOutputMode(mode) {
     AppState.outputMode = mode;
-    ['html','image'].forEach(m => {
-        const btn = document.getElementById(`omode-btn-${m}`);
-        if (btn) btn.className = `flex-1 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 ${
-            m === mode
-                ? (m==='html' ? 'bg-violet-500/25 text-violet-300' : 'bg-sky-500/25 text-sky-300')
-                : 'text-slate-400 hover:text-slate-200'
-        }`;
-    });
+    // 只切換純圖按鈕高亮（html 模式按鈕已移除，改為快速生成按鈕）
+    const imgBtn = document.getElementById('omode-btn-image');
+    if (imgBtn) imgBtn.className = `flex-1 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+        mode === 'image' ? 'bg-sky-500/25 text-sky-300' : 'text-slate-400 hover:text-slate-200'
+    }`;
     const piPanel = document.getElementById('pureimage-models');
     if (piPanel) piPanel.classList.toggle('hidden', mode !== 'image');
+}
+
+// ── 快速設定一鍵套用 ───────────────────────────────────────────────────
+function quickGenerate() {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+
+    // 首選文字模型: Gemini 2.5 Pro
+    set('sel-text-model', 'gemini-2.5-pro');
+    if (typeof updateHeaderBadge === 'function') updateHeaderBadge();
+
+    // 首選配圖模型: Grok Imagine Image Pro
+    set('sel-img-model', 'grok-imagine-image-pro');
+
+    // 投影片底色: 現代極簡
+    if (typeof setBgMode === 'function') setBgMode('preset');
+    set('sel-template', 'modern');
+    if (typeof updateThemePreview === 'function') updateThemePreview();
+
+    // AI 圖片插入模式: 自動判斷（不插入網路圖片，只插入需要的流程圖）
+    set('sel-image-mode', 'diagram_auto');
+    if (typeof updateImageModeHint === 'function') updateImageModeHint();
+
+    // 視覺品質審查: 關閉
+    const review = document.getElementById('chk-review-enabled');
+    if (review) { review.checked = false; if (typeof updateReviewHint === 'function') updateReviewHint(); }
+
+    // 投影片文字密度: 閱讀 (value=3)
+    const density = document.getElementById('range-text-density');
+    if (density) { density.value = '3'; if (typeof updateDensityLabel === 'function') updateDensityLabel('3'); }
+
+    // 投影片數量: 依目前設定（不動）
+
+    // 純圖模式圖形配置 — 背景圖 LLM: Grok Imagine Image
+    set('sel-bg-gen-model', 'grok-imagine-image');
+
+    // 排版 LLM: Gemini 2.5 Pro
+    set('sel-layout-model', 'gemini-2.5-pro');
+
+    // Google 聯網搜尋: 關閉
+    const ws = document.getElementById('chk-web-search');
+    if (ws) { ws.checked = false; if (typeof updateWsPanel === 'function') updateWsPanel(); }
+
+    // 確保輸出模式為 HTML（預設）
+    setOutputMode('html');
+
+    showToast('⚡ 快速設定已套用！可直接輸入主題開始生成');
 }
 
 // ─── Pure Image PPT: Imagen-3 Background Generator ────────────────
@@ -5141,7 +5185,7 @@ function imgPickerCancel() {
 async function getSlideImage(sData, imageMode, slideIndex) {
     const wantsImage = sData.layout === 'text_and_image';
     const forceAI    = imageMode === 'all' && !['title_only','diagram_slide'].includes(sData.layout);
-    const noImage    = imageMode === 'none';
+    const noImage    = imageMode === 'none' || imageMode === 'diagram_auto';
 
     if (noImage) return null;
 
