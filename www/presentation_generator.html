@@ -1079,8 +1079,8 @@ function quickGenerate() {
     const ws = document.getElementById('chk-web-search');
     if (ws) { ws.checked = false; if (typeof updateWsPanel === 'function') updateWsPanel(); }
 
-    // 確保輸出模式為 HTML（預設）
-    setOutputMode('html');
+    // 輸出格式：純圖輸出 PPT（與純圖輸出 PPT 按鈕相同）
+    setOutputMode('image');
 
     showToast('⚡ 快速設定已套用！可直接輸入主題開始生成');
 }
