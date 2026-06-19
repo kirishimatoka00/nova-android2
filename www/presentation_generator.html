@@ -361,8 +361,9 @@
                         <select id="sel-image-mode" onchange="updateImageModeHint()" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-200 focus:border-amber-500 outline-none">
                             <optgroup label="── AI 生成 ──">
                                 <option value="auto">🤖 自動判斷（AI 決定哪頁需要圖片）</option>
+                                <option value="diagram_auto">🤖 自動判斷（不插入網路圖片，只插入需要的流程圖）</option>
                                 <option value="all">🤖 強制每張都插入 AI 生成圖片</option>
-                                <option value="none">🚫 不插入圖片（純 HTML/CSS）</option>
+                                <option value="none">🚫 不插入圖片（純 SVG/CSS）</option>
                             </optgroup>
                             <optgroup label="── SerpAPI 搜尋圖片 ──">
                                 <option value="serp_only">🔍 純 SerpAPI 搜尋圖片（20 張供選）</option>
@@ -1009,12 +1010,13 @@ window.promptApiKey = async function promptApiKey(type = 'gemini') {
 function updateImageModeHint() {
     const mode = document.getElementById('sel-image-mode')?.value || 'auto';
     const hints = {
-        auto:        'AI 自動決定哪些頁面需要插圖，其餘頁面純 HTML/CSS',
-        all:         '所有投影片強制使用配圖模型生成圖片',
-        none:        '不插入任何圖片，全部用 SVG/CSS 視覺設計',
-        serp_only:   '🔍 每頁需圖時呼叫 SerpAPI 搜尋 20 張供您選擇（需設定 SerpAPI Key）',
-        serp_primary:'🔍 優先使用 SerpAPI 搜尋圖片，搜尋失敗時自動改用 AI 生成',
-        serp_mixed:  '🔀 奇數頁用 SerpAPI 搜尋，偶數頁用 AI 生成，形成視覺多樣性'
+        auto:         'AI 自動決定哪些頁面需要插圖，其餘頁面純 SVG/CSS',
+        diagram_auto: '不插入真實圖片或網路圖片，AI 自動判斷是否使用 SVG 流程圖版型（diagram_slide）',
+        all:          '所有投影片強制使用配圖模型生成圖片',
+        none:         '不插入任何圖片，全部用 SVG/CSS 視覺設計',
+        serp_only:    '🔍 每頁需圖時呼叫 SerpAPI 搜尋 20 張供您選擇（需設定 SerpAPI Key）',
+        serp_primary: '🔍 優先使用 SerpAPI 搜尋圖片，搜尋失敗時自動改用 AI 生成',
+        serp_mixed:   '🔀 奇數頁用 SerpAPI 搜尋，偶數頁用 AI 生成，形成視覺多樣性'
     };
     const el = document.getElementById('image-mode-hint');
     if (el) el.textContent = hints[mode] || '';
@@ -2082,6 +2084,7 @@ async function callGeminiForOutline(topic, context) {
 
     const imageModeHint = {
         auto:         'AI 自行判斷哪些投影片適合圖文並排（text_and_image），其餘用 text_only 或 diagram_slide',
+        diagram_auto: '禁止使用 text_and_image（不插入任何真實圖片），只允許 text_only、title_only、diagram_slide；若需視覺化請用 diagram_slide（SVG 流程圖/架構圖）',
         all:          '大多數投影片使用 text_and_image 版型',
         none:         '禁止使用 text_and_image，只用 text_only、title_only、diagram_slide',
         serp_only:    'SerpAPI 搜尋圖片模式，有需要配圖時使用 text_and_image，並在 image_prompt 描述圖片主題',
@@ -5034,7 +5037,7 @@ function imgPickerCancel() {
 async function getSlideImage(sData, imageMode, slideIndex) {
     const wantsImage = sData.layout === 'text_and_image';
     const forceAI    = imageMode === 'all' && !['title_only','diagram_slide'].includes(sData.layout);
-    const noImage    = imageMode === 'none';
+    const noImage    = imageMode === 'none' || imageMode === 'diagram_auto';
 
     if (noImage) return null;
 
