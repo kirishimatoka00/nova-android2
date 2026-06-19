@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI HTML 簡報生成器 v34 · NOVA 120 Pro</title>
+    <title>AI HTML 簡報生成器 v35 · NOVA 120 Pro</title>
 
     <!-- Tailwind：CDN 為主（有網路），vendor/tailwind.css 為離線備援 -->
     <link rel="stylesheet" href="./vendor/tailwind.css">
@@ -3263,10 +3263,6 @@ function renderSlidePreviewCard(slideData, html, index) {
                 <p class="text-xs font-semibold text-slate-200 truncate">${slideData.title || '（無標題）'}</p>
             </div>
             <div class="flex gap-1.5 shrink-0">
-                <button onclick="openEditModal(${index})" title="編輯此頁"
-                    class="text-slate-500 hover:text-amber-400 transition-colors p-1">
-                    <i class="ph-bold ph-pencil-simple text-base"></i>
-                </button>
                 <button onclick="previewSingleSlide(${index})" title="全螢幕預覽"
                     class="text-slate-500 hover:text-sky-400 transition-colors p-1">
                     <i class="ph-bold ph-arrows-out text-base"></i>
@@ -6245,7 +6241,7 @@ async function startGeneration() {
 // SINGLE-SLIDE AI EDIT MODAL
 // ══════════════════════════════════════════════════════════════
 let _editSlideIndex = -1;
-let _editTab = 'regen';
+let _editTab = 'pureimg';
 
 function openSlideEditModal(index) {
     const s = AppState.generatedSlides[index];
@@ -6256,14 +6252,11 @@ function openSlideEditModal(index) {
     document.getElementById('slide-edit-modal-title').textContent = 'AI 修改 — ' + (sd.title || '第 ' + s.slideNumber + ' 頁');
     document.getElementById('slide-edit-modal-subtitle').textContent = '第 ' + s.slideNumber + ' 頁 · ' + (sd.layout || '');
 
-    const outlineStr = JSON.stringify({ title: sd.title, subtitle: sd.subtitle, bullet_points: sd.bullet_points, layout: sd.layout }, null, 2);
-    document.getElementById('regen-outline-preview').textContent = outlineStr;
-
     document.getElementById('edit-instruction-input').value = '';
     document.getElementById('slide-edit-status').classList.add('hidden');
     document.getElementById('slide-edit-status').classList.remove('flex');
     document.getElementById('btn-run-slide-edit').disabled = false;
-    switchEditTab('regen');
+    switchEditTab('pureimg');
     document.getElementById('modal-slide-edit').classList.remove('hidden');
 }
 
@@ -6273,9 +6266,9 @@ function closeSlideEditModal() {
 
 function switchEditTab(tab) {
     _editTab = tab;
-    const panels = { regen: 'panel-regen', pureimg: 'panel-pureimg', modify: 'panel-modify' };
-    const tabs   = { regen: 'tab-regen',   pureimg: 'tab-pureimg',   modify: 'tab-modify'   };
-    const labels = { regen: '重新生成',     pureimg: '純圖生成',       modify: '套用修改'      };
+    const panels = { pureimg: 'panel-pureimg', modify: 'panel-modify' };
+    const tabs   = { pureimg: 'tab-pureimg',   modify: 'tab-modify'   };
+    const labels = { pureimg: '純圖生成',       modify: '套用修改'      };
     const activeClass = 'flex-1 py-3 text-sm font-semibold transition-all border-b-2 border-violet-500 text-violet-400';
     const idleClass   = 'flex-1 py-3 text-sm font-semibold transition-all border-b-2 border-transparent text-slate-400 hover:text-slate-200';
     Object.entries(panels).forEach(([key, panelId]) => {
@@ -6349,25 +6342,7 @@ async function runSlideEdit() {
         const sd    = s.slideData || {};
         let newHtml = '';
 
-        if (_editTab === 'regen') {
-            statusTxt.textContent = 'AI 重新生成 HTML 版面中...';
-            newHtml = await generateSlideHTML(sd, theme, s.imageB64 || null);
-
-            // ── Blank-slide guard for diagram_slide ──
-            if (sd.layout === 'diagram_slide') {
-                const svgContent = newHtml.match(/<svg[\s\S]*?<\/svg>/i)?.[0] || '';
-                const hasRealContent = /(<rect[^>]*(?:width|x)=(?:"[1-9]|'[1-9])[\s\S]{0,800}){2,}/i.test(svgContent)
-                    || /<circle[^>]*r=/i.test(svgContent)
-                    || /<path[^>]*d=/i.test(svgContent)
-                    || /<polygon/i.test(svgContent)
-                    || /<foreignObject/i.test(svgContent);
-                if (!hasRealContent) {
-                    statusTxt.textContent = 'diagram_slide 空白，重試中...';
-                    newHtml = await generateSlideHTML(sd, theme, s.imageB64 || null);
-                }
-            }
-
-        } else if (_editTab === 'pureimg') {
+        if (_editTab === 'pureimg') {
             // Pure-image regeneration for this single slide
             statusTxt.textContent = '背景 LLM 生成中...';
             const bgGenModel  = (document.getElementById('sel-bg-gen-model') || {}).value || 'gemini-2.5-flash';
@@ -6535,12 +6510,8 @@ async function runSlideEdit() {
 
     <!-- Tabs -->
     <div class="flex border-b border-slate-700 bg-slate-900/50">
-      <button id="tab-regen" onclick="switchEditTab('regen')"
-        class="flex-1 py-3 text-sm font-semibold transition-all border-b-2 border-violet-500 text-violet-400">
-        <i class="ph-bold ph-code mr-1.5"></i>HTML重生成
-      </button>
       <button id="tab-pureimg" onclick="switchEditTab('pureimg')"
-        class="flex-1 py-3 text-sm font-semibold transition-all border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+        class="flex-1 py-3 text-sm font-semibold transition-all border-b-2 border-violet-500 text-violet-400">
         <i class="ph-bold ph-image mr-1.5"></i>純圖重生成
       </button>
       <button id="tab-modify" onclick="switchEditTab('modify')"
@@ -6551,14 +6522,8 @@ async function runSlideEdit() {
 
     <!-- Body -->
     <div class="px-6 py-5 flex flex-col gap-4">
-      <!-- Regen panel -->
-      <div id="panel-regen" class="flex flex-col gap-3">
-        <p class="text-slate-300 text-sm">根據投影片原始大綱資料，讓 AI 重新設計 <strong class="text-violet-300">HTML/CSS 向量版面</strong>（可拖曳、可編輯文字）。</p>
-        <div class="bg-slate-800 rounded-xl p-4 text-xs text-slate-400 font-mono leading-relaxed max-h-24 overflow-y-auto" id="regen-outline-preview"></div>
-      </div>
-
       <!-- Pure-image panel -->
-      <div id="panel-pureimg" class="hidden flex-col gap-3">
+      <div id="panel-pureimg" class="flex flex-col gap-3">
         <p class="text-slate-300 text-sm">使用背景 LLM + 排版 LLM 重新生成此頁為<strong class="text-amber-300">純圖模式</strong>（高保真視覺效果，截圖輸出）。</p>
         <div class="bg-slate-800/60 rounded-xl p-3 text-xs text-slate-400 flex items-center gap-2">
           <i class="ph-bold ph-info text-amber-400"></i>
@@ -6796,21 +6761,52 @@ window.alert = function(msg) {
 })();
 
 // ── Android 相容存檔 ──────────────────────────────────────────
+// Convert an ArrayBuffer to base64 in chunks to avoid call-stack / memory
+// issues with very large files (e.g. combined multi-slide HTML exports
+// with many embedded base64 images can be tens of MB — a single-shot
+// FileReader.readAsDataURL() or String.fromCharCode(...bytes) call on
+// data that size can silently fail or hang in the Android WebView).
+function _arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000; // 32KB per chunk
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+}
+
 async function saveOrDownload(content, filename, mimeType) {
-    var isAndroid = !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()==='android');
-    if (isAndroid) {
+    const isAndroid = !!(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()==='android');
+    const blob = (content instanceof Blob) ? content : new Blob([content], {type: mimeType||'application/octet-stream'});
+    const hasFilesystem = isAndroid && !!(window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem);
+
+    if (hasFilesystem) {
         try {
-            var base64;
-            var blob = (content instanceof Blob) ? content : new Blob([content], {type: mimeType||'application/octet-stream'});
-            base64 = await new Promise(function(resolve,reject){ var r=new FileReader(); r.onload=function(){resolve(r.result.split(',')[1]);}; r.onerror=reject; r.readAsDataURL(blob); });
+            const buffer = await blob.arrayBuffer();
+            const base64 = _arrayBufferToBase64(buffer);
             await Capacitor.Plugins.Filesystem.writeFile({path:filename, data:base64, directory:'DOCUMENTS', recursive:true});
             showToast('✅ 已儲存至文件/'+filename);
-        } catch(e) { showToast('❌ 儲存失敗：'+(e.message||e)); }
-    } else {
-        var blob2 = (content instanceof Blob) ? content : new Blob([content],{type:mimeType||'application/octet-stream'});
-        var url=URL.createObjectURL(blob2), a=document.createElement('a');
-        a.href=url; a.download=filename; a.click();
-        setTimeout(function(){URL.revokeObjectURL(url);},1000);
+            return;
+        } catch(e) {
+            console.error('saveOrDownload: Filesystem write failed:', e);
+            showToast('⚠ 原生儲存失敗，改用瀏覽器下載：'+(e.message||e));
+            // fall through to browser-download fallback below
+        }
+    }
+
+    try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+        if (!hasFilesystem) showToast('✅ 已下載 '+filename);
+    } catch(e2) {
+        console.error('saveOrDownload: browser download failed:', e2);
+        showToast('❌ 儲存失敗：'+(e2.message||e2));
     }
 }
 </script>
