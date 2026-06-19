@@ -2913,13 +2913,11 @@ ${(()=>{
       連接：小箭頭 SVG 在卡片之間
 
     【如需使用 Chart.js（折線/柱狀圖）】
-    ⚠ 需確保 CDN 可連線，否則 canvas 留白。請在 <script> 中加入 onerror 回退：
-    <script>
-    var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js';
+    ⚠ 需確保 CDN 可連線，否則 canvas 留白。請在 script 標籤中加入 onerror 回退：
+    範例：var s=document.createElement('script'); s.src='CDN_URL';
     s.onload=function(){ /* Chart.js 初始化 */ };
     s.onerror=function(){ /* 回退：用純 SVG 長條圖替代 */ };
-    document.head.appendChild(s);
-    </script>`;
+    document.head.appendChild(s);`;
   return `  ★ 使用 text_only 佈局作為預設（layout="${L}" 未定義，自動 fallback）`;
 })()}
 
