@@ -11801,7 +11801,7 @@ if (appState.pendingAnalyzeContextId) {
                 .replace(/<script[\s\S]*?<\/script>/gi, '')
                 .replace(/<style[\s\S]*?<\/style>/gi, '');
 
-            const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr','!doctype','html']);
+            const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
             const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/)?>/g;
             const stack = [];
             let tm;
@@ -11814,8 +11814,13 @@ if (appState.pendingAnalyzeContextId) {
                     const idx = stack.lastIndexOf(tagName);
                     if (idx === -1) {
                         errors.push(`發現多餘或不匹配的結束標籤 </${tagName}>`);
+                    } else if (idx === stack.length - 1) {
+                        stack.pop(); // 正常情況：剛好對應堆疊頂端
                     } else {
-                        stack.length = idx; // 把中間沒收尾的也一併丟棄，避免連鎖誤報
+                        // 中間有標籤還沒收尾，就被外層的結束標籤提前打斷
+                        const unclosed = stack.slice(idx + 1);
+                        errors.push(`標籤 <${unclosed.join('>, <')}> 未正確收尾，就被 </${tagName}> 提前結束`);
+                        stack.length = idx;
                     }
                 } else if (!isSelfClosing) {
                     stack.push(tagName);
