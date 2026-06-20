@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI HTML 簡報生成器 v35 · NOVA 120 Pro</title>
+    <title>AI HTML 簡報生成器 v37 · NOVA 120 Pro</title>
 
     <!-- Tailwind：CDN 為主（有網路），vendor/tailwind.css 為離線備援 -->
     <link rel="stylesheet" href="./vendor/tailwind.css">
@@ -467,9 +467,9 @@
                             投影片數量
                             <span id="slide-count-val" class="text-amber-400 font-bold">10 張</span>
                         </label>
-                        <input type="range" id="range-slide-count" min="2" max="50" value="10"
+                        <input type="range" id="range-slide-count" min="1" max="50" value="10"
                             oninput="document.getElementById('slide-count-val').textContent=this.value+' 張'" class="w-full">
-                        <div class="flex justify-between text-slate-600 text-[10px] mt-1"><span>2</span><span>50</span></div>
+                        <div class="flex justify-between text-slate-600 text-[10px] mt-1"><span>1</span><span>50</span></div>
                     </div>
 
                 </div>
@@ -1306,6 +1306,30 @@ async function startPureImageGeneration() {
             if (!html || html.trim().length < 50) {
                 addLog(`  ⚠ HTML 為空，使用備援佈局`, 'warning');
                 html = buildFallbackSlideHTML(sData, theme);
+            }
+
+            // ── Structural self-check: HTML 標籤／括號／邏輯是否正確閉合，異常則自動重生成 ──
+            if (!AppState.cancelRequested) {
+                const MAX_STRUCT_RETRIES = 2;
+                let structCheck = validateSlideStructure(html);
+                let structRetries = 0;
+                while (!structCheck.valid && structRetries < MAX_STRUCT_RETRIES && !AppState.cancelRequested) {
+                    structRetries++;
+                    addLog(`  ⚠ 結構自檢未通過（${structCheck.errors.join('；')}），自動重新排版中... (${structRetries}/${MAX_STRUCT_RETRIES})`, 'warning');
+                    try {
+                        html = await compositeSlideWithLayoutLLM(sData, bgB64, contentImgB64, theme, layoutModel, apiKey, signal, !!AppState.bgTemplateBase64);
+                        structCheck = validateSlideStructure(html);
+                    } catch(e4) {
+                        if (e4.message === 'CanceledByUser') throw e4;
+                        structCheck = { valid: false, errors: ['重新排版例外：' + e4.message] };
+                    }
+                }
+                if (!structCheck.valid) {
+                    addLog(`  ⚠ 結構仍異常，改用備援佈局`, 'warning');
+                    html = buildFallbackSlideHTML(sData, theme);
+                } else if (structRetries > 0) {
+                    addLog(`  ✓ 結構自檢通過（重試 ${structRetries} 次後）`, 'success');
+                }
             }
 
             // Step 2b: Programmatic contrast pre-scan
@@ -5748,6 +5772,140 @@ function detectOverlaps(html) {
 
 /** Remove AI hallucinations: hex color codes and technical labels in text nodes */
 // ═══════════════════════════════════════════════════════════════════
+// STRUCTURAL SELF-CHECK
+// Verifies AI-generated slide HTML has properly closed tags, balanced
+// brackets in any inline <style> blocks, and syntactically valid inline
+// <script> blocks (covers "HTML 標籤 / 括號 / 邏輯" all correctly closed).
+// Used right after each slide is generated so a malformed slide can be
+// automatically regenerated instead of shipping broken markup.
+// ═══════════════════════════════════════════════════════════════════
+const _SLIDE_VOID_TAGS = new Set([
+    'area','base','br','col','embed','hr','img','input','link','meta',
+    'param','source','track','wbr',
+    // SVG elements commonly emitted without an explicit self-closing slash
+    'path','rect','circle','line','polygon','polyline','stop','use','ellipse','image'
+]);
+
+// Quote-aware tag scanner — manually walks the string instead of relying on
+// a single regex, so a '>' inside a quoted attribute value (e.g. an inline
+// onclick="if(x>1){...}") can never be mistaken for the tag's real end.
+function _extractSlideTags(html) {
+    const tags = [];
+    const len = html.length;
+    let i = 0;
+    while (i < len) {
+        if (html[i] !== '<') { i++; continue; }
+        let j = i + 1;
+        let isClosing = false;
+        if (html[j] === '/') { isClosing = true; j++; }
+        const nameStart = j;
+        while (j < len && /[a-zA-Z0-9:-]/.test(html[j])) j++;
+        if (j === nameStart) { i++; continue; } // '<' wasn't followed by a tag name (e.g. "x < 10")
+        const tagName = html.slice(nameStart, j).toLowerCase();
+
+        let inQuote = null, selfClosing = false, k = j;
+        while (k < len) {
+            const c = html[k];
+            if (inQuote) {
+                if (c === inQuote) inQuote = null;
+            } else if (c === '"' || c === "'") {
+                inQuote = c;
+            } else if (c === '>') {
+                let p = k - 1;
+                while (p > nameStart && /\s/.test(html[p])) p--;
+                if (html[p] === '/') selfClosing = true;
+                break;
+            }
+            k++;
+        }
+        tags.push({ isClosing, tagName, selfClosing });
+        i = k + 1;
+    }
+    return tags;
+}
+
+function _checkSlideTagBalance(html) {
+    // Strip script/style contents and comments first so tag-like text inside
+    // JS strings, CSS, or comments can't be mistaken for real HTML tags.
+    const stripped = html
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '<script><\/script>')
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '<style><\/style>')
+        .replace(/<!--[\s\S]*?-->/g, '');
+
+    const stack = [];
+    const tags = _extractSlideTags(stripped);
+    for (const t of tags) {
+        if (t.isClosing) {
+            if (_SLIDE_VOID_TAGS.has(t.tagName)) continue;
+            if (stack.length === 0) {
+                return { valid: false, reason: `多餘的結束標籤 </${t.tagName}>（沒有對應的開始標籤）` };
+            }
+            if (stack[stack.length - 1] !== t.tagName) {
+                return { valid: false, reason: `標籤未正確閉合：預期 </${stack[stack.length - 1]}>，卻出現 </${t.tagName}>` };
+            }
+            stack.pop();
+        } else if (!t.selfClosing && !_SLIDE_VOID_TAGS.has(t.tagName)) {
+            stack.push(t.tagName);
+        }
+    }
+    if (stack.length > 0) {
+        return { valid: false, reason: `${stack.length} 個標籤未閉合：<${stack.slice(-5).join('>, <')}>` };
+    }
+    return { valid: true };
+}
+
+function _checkSlideStyleBraceBalance(html) {
+    const blocks = html.match(/<style\b[^>]*>([\s\S]*?)<\/style>/gi) || [];
+    for (let i = 0; i < blocks.length; i++) {
+        const code = blocks[i].replace(/^<style\b[^>]*>/i, '').replace(/<\/style>\s*$/i, '');
+        let depth = 0;
+        for (let j = 0; j < code.length; j++) {
+            const ch = code[j];
+            if (ch === '{') depth++;
+            else if (ch === '}') {
+                depth--;
+                if (depth < 0) return { valid: false, reason: `<style> 區塊 #${i+1} 出現多餘的 '}'` };
+            }
+        }
+        if (depth !== 0) return { valid: false, reason: `<style> 區塊 #${i+1} 有 ${depth} 個未閉合的 '{'` };
+    }
+    return { valid: true };
+}
+
+function _checkSlideScriptSyntax(html) {
+    const blocks = html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/gi) || [];
+    for (let i = 0; i < blocks.length; i++) {
+        const code = blocks[i].replace(/^<script\b[^>]*>/i, '').replace(/<\/script>\s*$/i, '');
+        if (!code.trim()) continue;
+        try {
+            new Function(code); // eslint-disable-line no-new-func — parse-only, never executed
+        } catch(e) {
+            return { valid: false, reason: `<script> 區塊 #${i+1} 語法錯誤：${e.message}` };
+        }
+    }
+    return { valid: true };
+}
+
+/**
+ * Validates that a generated slide's HTML tags, inline-style braces, and
+ * inline-script brackets/logic are all properly closed.
+ * @returns {{valid:boolean, errors:string[]}}
+ */
+function validateSlideStructure(html) {
+    if (!html || typeof html !== 'string' || html.trim().length < 50) {
+        return { valid: false, errors: ['內容過短或為空'] };
+    }
+    const errors = [];
+    const tagCheck   = _checkSlideTagBalance(html);
+    const styleCheck = _checkSlideStyleBraceBalance(html);
+    const scriptCheck = _checkSlideScriptSyntax(html);
+    if (!tagCheck.valid)    errors.push(tagCheck.reason);
+    if (!styleCheck.valid)  errors.push(styleCheck.reason);
+    if (!scriptCheck.valid) errors.push(scriptCheck.reason);
+    return { valid: errors.length === 0, errors };
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // LAYOUT SAFETY ENFORCEMENT
 // Injects overflow:hidden + box-sizing on all containers so AI-
 // generated HTML can never overflow the 1920×1080 canvas.
@@ -6141,6 +6299,30 @@ async function startGeneration() {
                 if (e.message === 'CanceledByUser') throw e;
                 addLog(`⚠ 第 ${sData.slide_number} 頁 HTML 生成失敗，使用備用模板`, 'warning');
                 html = buildFallbackSlideHTML(sData, theme);
+            }
+
+            // ── Structural self-check: HTML 標籤／括號／邏輯是否正確閉合，異常則自動重生成 ──
+            if (!AppState.cancelRequested) {
+                const MAX_STRUCT_RETRIES = 2;
+                let structCheck = validateSlideStructure(html);
+                let structRetries = 0;
+                while (!structCheck.valid && structRetries < MAX_STRUCT_RETRIES && !AppState.cancelRequested) {
+                    structRetries++;
+                    addLog(`⚠ 第 ${sData.slide_number} 頁結構自檢未通過（${structCheck.errors.join('；')}），自動重新生成中... (${structRetries}/${MAX_STRUCT_RETRIES})`, 'warning');
+                    try {
+                        html = await generateSlideHTML(sData, theme, imageB64);
+                        structCheck = validateSlideStructure(html);
+                    } catch(e3) {
+                        if (e3.message === 'CanceledByUser') throw e3;
+                        structCheck = { valid: false, errors: ['重新生成例外：' + e3.message] };
+                    }
+                }
+                if (!structCheck.valid) {
+                    addLog(`⚠ 第 ${sData.slide_number} 頁結構仍異常，改用備用模板`, 'warning');
+                    html = buildFallbackSlideHTML(sData, theme);
+                } else if (structRetries > 0) {
+                    addLog(`✓ 第 ${sData.slide_number} 頁結構自檢通過（重試 ${structRetries} 次後）`, 'success');
+                }
             }
 
             // ── Blank-slide guard for diagram_slide: retry once if SVG has no real content ──
