@@ -11901,7 +11901,11 @@ if (appState.pendingAnalyzeContextId) {
                     // 💡 修正：深度分析模式（長錄音逐字稿＋摘要）可能超過 8192 tokens 而被截斷
                     //         isAnalysis 為 true 時（錄音/語音筆記深度分析），改用 65536 tokens 上限以確保完整輸出
                     const analysisMaxTokens = 65536;
-                    const normalMaxTokens = 8192;
+                    // 💡 提高一般對話的輸出上限：原本 8192 tokens 對複雜的 Canvas 程式碼
+                    //    （如 Three.js 3D 場景、完整控制面板等）經常不夠，導致程式碼被攔腰截斷、
+                    //    送進 Canvas 執行時出現語法錯誤或空白畫面。提高到與分析模式相同上限，
+                    //    純粹是「上限」而非「目標長度」，不會增加一般簡短回覆的成本或延遲。
+                    const normalMaxTokens = 65536;
                     const payload = { contents: contents, generationConfig: { temperature: 0.7, maxOutputTokens: options.isAnalysis ? analysisMaxTokens : normalMaxTokens } };
                     // 🎨 Gemini 圖片生成模型需要明確啟用 IMAGE 輸出模式，且不可同時開啟 Google Search
                     if (isGeminiImageModel) {
@@ -12113,8 +12117,81 @@ if (appState.pendingAnalyzeContextId) {
                         } else {
                             outputText = stripMarkers(outputText); // 只有一段，清除標記即可
                         }
+                    } else if (!responseImageFile) {
+                        // 🔄 Canvas 程式碼自動續寫安全網：
+                        //    即使提高了 maxOutputTokens，極複雜的程式仍可能被截斷。
+                        //    偵測依據：① finishReason 為 MAX_TOKENS  ② 回覆中的 ``` 數量為奇數
+                        //    （代表開了程式碼區塊卻沒收尾）→ 兩者同時成立才視為「程式碼被截斷」，
+                        //    避免誤判一般對話中提到奇數個反引號的情況。
+                        const MAX_CODE_CONTINUATION_PARTS = 5;
+                        const _fenceCount = (s) => (s.match(/```/g) || []).length;
+
+                        let codeCurrentCandidate = currentCandidate;
+                        let codeLatestText = outputText;
+                        let codeContinuationCount = 0;
+
+                        const needsCodeContinuation = (raw, cand) => {
+                            if (!raw) return false;
+                            const fr = cand?.finishReason;
+                            const isTruncated = (fr === 'MAX_TOKENS' || fr === 2);
+                            const fenceUnclosed = (_fenceCount(raw) % 2 === 1);
+                            return isTruncated && fenceUnclosed;
+                        };
+
+                        while (
+                            needsCodeContinuation(codeLatestText, codeCurrentCandidate) &&
+                            codeContinuationCount < MAX_CODE_CONTINUATION_PARTS
+                        ) {
+                            codeContinuationCount++;
+                            if (typeof addMessage === 'function') {
+                                addMessage(`⏳ 程式碼似乎被截斷了，正在自動接續第 ${codeContinuationCount} 段…`, 'system');
+                            }
+                            console.log(`[Canvas續寫] 第 ${codeContinuationCount} 段，finishReason=${codeCurrentCandidate?.finishReason}`);
+
+                            const codeContinuationContents = [
+                                ...contents,
+                                { role: 'model', parts: [{ text: outputText }] },
+                                { role: 'user', parts: [{ text: `你上一則回覆的程式碼在輸出途中被截斷了。請直接從中斷的那一行繼續往下寫剩餘的程式碼，不要重複任何已經輸出過的內容，不要重新打開新的 \`\`\` 開頭標記，不要加任何說明文字、道歉或標題，完成整段程式後請務必以單獨一行的 \`\`\` 結尾收尾。` }] }
+                            ];
+                            const codeContPayload = {
+                                contents: codeContinuationContents,
+                                generationConfig: { temperature: 0.7, maxOutputTokens: normalMaxTokens }
+                            };
+
+                            try {
+                                const codeContRes = await fetchWithTimeout(endpoint, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(codeContPayload)
+                                });
+                                if (!codeContRes.ok) {
+                                    console.warn('[Canvas續寫] API 失敗:', codeContRes.status);
+                                    break;
+                                }
+                                const codeContData = await codeContRes.json();
+                                codeCurrentCandidate = codeContData.candidates?.[0];
+                                if (!codeCurrentCandidate?.content?.parts) {
+                                    console.warn('[Canvas續寫] 續寫回傳無 parts，停止');
+                                    break;
+                                }
+                                const codeContText = codeCurrentCandidate.content.parts.filter(p => p.text).map(p => p.text).join('');
+                                outputText += codeContText;
+                                codeLatestText = codeContText;
+                            } catch (codeContErr) {
+                                console.warn('[Canvas續寫] 例外:', codeContErr);
+                                break;
+                            }
+                        }
+
+                        if (codeContinuationCount > 0 && typeof addMessage === 'function') {
+                            if (_fenceCount(outputText) % 2 === 1) {
+                                addMessage(`⚠️ 程式碼經過 ${codeContinuationCount} 次自動接續仍未完整收尾，可能仍有缺漏，請留意執行結果，必要時可請我「繼續」。`, 'system');
+                            } else {
+                                addMessage(`✅ 程式碼已自動接續補全完成（共 ${codeContinuationCount + 1} 段合併）。`, 'system');
+                            }
+                        }
                     } else {
-                        // 非分析模式：不清標記
+                        // 圖片回覆等其他情況：不處理續寫
                     }
 
                     const candidate = currentCandidate; // 保持後續程式碼相容性
