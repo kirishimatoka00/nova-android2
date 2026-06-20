@@ -11606,6 +11606,72 @@ if (appState.deepDiveMode) { systemPromptAddon = "【深度探究模式開啟 - 
             finalOutputText += `\n\n---\n*(第 ${totalParts} 段，共 ${totalParts} 段 — 已輸出完畢)*`;
         }
 
+        // 🔍 Canvas 程式碼自我檢查與自動修復：
+        //    AI 寫完程式後，自動檢查 HTML 標籤、JS/JSX 括號、Python 括號是否正確閉合，
+        //    若偵測到問題，自動把錯誤回饋給 AI 請它重新輸出完整且修正後的程式碼（最多 2 次）。
+        {
+            const _codeCheckRegex = /```(html|react|jsx|tsx|javascript|js|python|py)[ \t]*\r?\n?([\s\S]*?)```/gi;
+            let _hasCanvasCode = false;
+            { const _t = _codeCheckRegex.exec(finalOutputText); _hasCanvasCode = !!_t; _codeCheckRegex.lastIndex = 0; }
+
+            if (_hasCanvasCode) {
+                const MAX_SELF_REPAIR_ATTEMPTS = 2;
+                let _repairAttempt = 0;
+                let _allValid = false;
+
+                while (!_allValid && _repairAttempt <= MAX_SELF_REPAIR_ATTEMPTS) {
+                    const _blocks = [];
+                    _codeCheckRegex.lastIndex = 0;
+                    let _bm;
+                    while ((_bm = _codeCheckRegex.exec(finalOutputText)) !== null) {
+                        _blocks.push({ lang: _bm[1].toLowerCase(), code: _bm[2] });
+                    }
+                    if (_blocks.length === 0) { _allValid = true; break; }
+
+                    if (_repairAttempt === 0) {
+                        addMessage('🔍 正在自動檢查程式碼是否正確閉合…', 'system');
+                        renderMessages();
+                    }
+
+                    const _validationResults = [];
+                    for (const b of _blocks) {
+                        let r;
+                        try { r = await validateCanvasCode(b.lang, b.code); }
+                        catch (vErr) { r = { valid: true, error: null }; } // 檢查器本身出錯 → 不誤擋使用者
+                        _validationResults.push({ lang: b.lang, valid: r.valid, error: r.error });
+                    }
+
+                    const _invalid = _validationResults.filter(r => !r.valid);
+                    if (_invalid.length === 0) {
+                        _allValid = true;
+                        if (_repairAttempt > 0) addMessage(`✅ 程式碼已修復完成（第 ${_repairAttempt} 次自動修正後通過檢查）。`, 'system');
+                        break;
+                    }
+
+                    if (_repairAttempt >= MAX_SELF_REPAIR_ATTEMPTS) {
+                        addMessage(`⚠️ 程式碼經過 ${MAX_SELF_REPAIR_ATTEMPTS} 次自動修復仍偵測到問題（${_invalid.map(x => x.error).join('；')}），已附上目前版本，執行時請留意，必要時可請我「繼續修正」。`, 'system');
+                        break;
+                    }
+
+                    _repairAttempt++;
+                    const _errSummary = _invalid.map((x, i) => `${i + 1}. [${x.lang}] ${x.error}`).join('\n');
+                    addMessage(`⚠️ 偵測到程式碼閉合有問題，正在自動修復（第 ${_repairAttempt} 次）…`, 'system');
+                    renderMessages();
+
+                    const _repairPrompt = `你剛剛產生的程式碼經過自動檢查，發現以下問題：\n${_errSummary}\n\n以下是你剛剛輸出的完整內容：\n${finalOutputText}\n\n請仔細檢查並修正所有 HTML 標籤、JavaScript／JSX 括號（{ } ( ) [ ]）與邏輯結構，確保全部正確閉合、可正常執行。請直接輸出修正後「完整」的程式碼（不可只給片段、不可省略未變動的部分、不可用註解代替省略的程式碼），語言 fence 與按鈕規則比照原本要求，不要加多餘的說明或道歉文字。`;
+
+                    try {
+                        const _repairRes = await fetchAIResponse(_repairPrompt, modelToUse, { enableSearch: false, disableSearch: true, files: [] });
+                        finalOutputText = typeof _repairRes === 'string' ? _repairRes : (_repairRes.text || finalOutputText);
+                        textToSpeak = finalOutputText;
+                    } catch (repairErr) {
+                        addMessage(`⚠️ 自動修復請求失敗（${repairErr.message}），將顯示目前版本。`, 'system');
+                        break;
+                    }
+                }
+            }
+        }
+
         if(typeof finalRes === 'string') addMessage(finalOutputText, 'ai', modelToUse);
         else addMessage(finalOutputText, 'ai', modelToUse, finalRes.sources, finalRes.file);
         
@@ -11663,6 +11729,138 @@ if (appState.pendingAnalyzeContextId) {
                 throw new Error(error.name === 'AbortError' ? '連線逾時，檔案可能過大或處理過久 (600s)' : error.message);
             }
         };
+
+        // ══════════════════════════════════════════════════════════════
+        // 🔍【NOVA Canvas 程式碼自我檢查】
+        //    在 AI 回覆顯示給使用者之前，先做一次「能不能正確閉合」的檢查：
+        //    - HTML：標籤是否成對閉合 + 內嵌 <script> 的 JS 語法是否正確
+        //    - React/JSX/TSX：用 Babel standalone 嘗試轉譯，轉譯失敗即視為語法錯誤
+        //    - JavaScript：用 new Function() 做純語法解析（不執行），可抓到未閉合的
+        //      { } ( ) [ ] 與引號等問題
+        //    - Python：輕量括號平衡檢查（忽略字串與註解內容）
+        //    任何一種檢查都只是「盡力而為」的啟發式判斷，不是完整的編譯器，
+        //    目的是攔住最常見的「程式碼被截斷／AI 漏寫括號」這類問題。
+        // ══════════════════════════════════════════════════════════════
+        let _novaBabelLoadPromise = null;
+        function _ensureBabelLoadedForValidation() {
+            if (window.Babel) return Promise.resolve();
+            if (_novaBabelLoadPromise) return _novaBabelLoadPromise;
+            _novaBabelLoadPromise = new Promise((resolve) => {
+                const s = document.createElement('script');
+                s.src = './vendor/babel-standalone.min.js';
+                s.onload = () => resolve();
+                s.onerror = () => { console.warn('[Canvas檢查] Babel 載入失敗，跳過 React/JSX 語法檢查'); resolve(); };
+                document.head.appendChild(s);
+            });
+            return _novaBabelLoadPromise;
+        }
+
+        function validateJsCode(code) {
+            if (!code || !code.trim()) return { valid: true, error: null };
+            try {
+                // 用 async 包一層，避免合法的頂層 await 被誤判為語法錯誤；
+                // new Function 只做語法解析，不會真的執行內容。
+                new Function('return (async function(){\n' + code + '\n})');
+                return { valid: true, error: null };
+            } catch (e) {
+                return { valid: false, error: `JavaScript 語法錯誤：${e.message}` };
+            }
+        }
+
+        async function validateReactCode(code) {
+            if (!code || !code.trim()) return { valid: true, error: null };
+            try {
+                await _ensureBabelLoadedForValidation();
+                if (!window.Babel) return { valid: true, error: null }; // Babel 載入失敗 → 不誤擋使用者
+                window.Babel.transform(code, { presets: ['react'] });
+                return { valid: true, error: null };
+            } catch (e) {
+                return { valid: false, error: `React/JSX 語法錯誤：${e.message}` };
+            }
+        }
+
+        function validateHtmlCode(fullCode) {
+            const errors = [];
+
+            // (1) 抽取所有內嵌 <script>（非外部 src）內容，逐一做 JS 語法檢查
+            const scriptRegex = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
+            let sm; let scriptIndex = 0;
+            while ((sm = scriptRegex.exec(fullCode)) !== null) {
+                scriptIndex++;
+                const attrs = sm[1] || '';
+                if (/\ssrc\s*=/.test(attrs)) continue; // 外部腳本無內容可檢查
+                const jsCode = sm[2];
+                if (!jsCode || !jsCode.trim()) continue;
+                const r = validateJsCode(jsCode);
+                if (!r.valid) errors.push(`第 ${scriptIndex} 個 <script> 區塊：${r.error}`);
+            }
+
+            // (2) HTML 標籤平衡檢查（先移除註解、<script>、<style> 內容避免誤判）
+            const tagCheckSrc = fullCode
+                .replace(/<!--[\s\S]*?-->/g, '')
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[\s\S]*?<\/style>/gi, '');
+
+            const VOID_TAGS = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr','!doctype','html']);
+            const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/)?>/g;
+            const stack = [];
+            let tm;
+            while ((tm = tagRegex.exec(tagCheckSrc)) !== null) {
+                const isClosing = tm[0][1] === '/';
+                const tagName = tm[1].toLowerCase();
+                const isSelfClosing = !!tm[2] || VOID_TAGS.has(tagName);
+                if (tagName === '!doctype') continue;
+                if (isClosing) {
+                    const idx = stack.lastIndexOf(tagName);
+                    if (idx === -1) {
+                        errors.push(`發現多餘或不匹配的結束標籤 </${tagName}>`);
+                    } else {
+                        stack.length = idx; // 把中間沒收尾的也一併丟棄，避免連鎖誤報
+                    }
+                } else if (!isSelfClosing) {
+                    stack.push(tagName);
+                }
+            }
+            if (stack.length > 0) {
+                errors.push(`以下標籤沒有對應的結束標籤：<${stack.join('>, <')}>`);
+            }
+
+            return { valid: errors.length === 0, error: errors.length > 0 ? errors.join('；') : null };
+        }
+
+        function validateBracketBalance(code) {
+            if (!code || !code.trim()) return { valid: true, error: null };
+            // 移除字串與註解內容，避免裡面的括號字元干擾判斷
+            const cleaned = code
+                .replace(/#.*$/gm, '')
+                .replace(/'''[\s\S]*?'''/g, '')
+                .replace(/"""[\s\S]*?"""/g, '')
+                .replace(/'(\\.|[^'\\])*'/g, "''")
+                .replace(/"(\\.|[^"\\])*"/g, '""');
+            const pairs = { '(': ')', '[': ']', '{': '}' };
+            const stack = [];
+            for (const ch of cleaned) {
+                if (pairs[ch]) stack.push(pairs[ch]);
+                else if (ch === ')' || ch === ']' || ch === '}') {
+                    if (stack.pop() !== ch) return { valid: false, error: `括號不匹配，出現多餘或順序錯誤的「${ch}」` };
+                }
+            }
+            if (stack.length > 0) return { valid: false, error: `缺少結尾括號：${stack.join(' ')}` };
+            return { valid: true, error: null };
+        }
+
+        async function validateCanvasCode(lang, code) {
+            const L = (lang || '').toLowerCase();
+            try {
+                if (L === 'html') return validateHtmlCode(code);
+                if (L === 'react' || L === 'jsx' || L === 'tsx') return await validateReactCode(code);
+                if (L === 'javascript' || L === 'js') return validateJsCode(code);
+                if (L === 'python' || L === 'py') return validateBracketBalance(code);
+            } catch (e) {
+                return { valid: true, error: null }; // 檢查器本身意外出錯 → 不誤擋使用者
+            }
+            return { valid: true, error: null }; // 其他語言不檢查，視為通過
+        }
 
         async function fetchAIResponse(userText, model, options = {}) {
             // ★ 從 handleSendMessage 傳入的通用意圖分類結果（_intentHints），
