@@ -3610,6 +3610,35 @@ input::placeholder, textarea::placeholder {
 }`;
                     document.head.appendChild(style);
                 }
+                // ── JS 強制覆寫所有表單控制項 ──
+                // CSS filter/background 對 Android WebView native form controls 無效（password 尤甚）
+                // 用 setProperty 'important' + -webkit-box-shadow inset 繞過 native 渲染
+                const _LFP = {
+                    'background-color':'#f1f5f9', 'color':'#0f172a',
+                    '-webkit-text-fill-color':'#0f172a',
+                    '-webkit-box-shadow':'0 0 0 1000px #f1f5f9 inset',
+                    'box-shadow':'0 0 0 1000px #f1f5f9 inset',
+                    '-webkit-appearance':'none', 'appearance':'none',
+                    'color-scheme':'light', 'border-color':'#94a3b8'
+                };
+                const _SEL_XP = {
+                    'background-image':"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2364748b'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E\")",
+                    'background-repeat':'no-repeat','background-position':'right 8px center',
+                    'background-size':'20px','padding-right':'2rem'
+                };
+                const _FQ = 'input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),select,textarea';
+                function applyLightFormStyles() {
+                    document.querySelectorAll(_FQ).forEach(el => {
+                        Object.entries(_LFP).forEach(([p,v]) => el.style.setProperty(p,v,'important'));
+                        if(el.tagName==='SELECT') Object.entries(_SEL_XP).forEach(([p,v]) => el.style.setProperty(p,v,'important'));
+                    });
+                }
+                applyLightFormStyles();
+                if(window._lightFormObserver) window._lightFormObserver.disconnect();
+                window._lightFormObserver = new MutationObserver(muts => {
+                    if(muts.some(m => m.addedNodes.length > 0)) applyLightFormStyles();
+                });
+                window._lightFormObserver.observe(document.body, {childList:true, subtree:true});
                 // ★ Android：白晝模式 → 狀態列/導覽列改為白色
                 if (window.Capacitor && window.Capacitor.getPlatform() === 'android') {
                     try {
@@ -3630,6 +3659,10 @@ input::placeholder, textarea::placeholder {
                 if(metaCSRestore) metaCSRestore.setAttribute('content', 'dark');
                 const style = document.getElementById('light-theme-fix');
                 if(style) style.remove();
+                // 清除白晝模式的 inline form 樣式並停止觀測
+                const _CLEAN = ['background-color','color','-webkit-text-fill-color','-webkit-box-shadow','box-shadow','-webkit-appearance','appearance','color-scheme','border-color','background-image','background-repeat','background-position','background-size','padding-right'];
+                document.querySelectorAll('input, select, textarea').forEach(el => _CLEAN.forEach(p => el.style.removeProperty(p)));
+                if(window._lightFormObserver) { window._lightFormObserver.disconnect(); window._lightFormObserver = null; }
                 // ★ Android：深色模式 → 狀態列/導覽列恢復 App 深色
                 if (window.Capacitor && window.Capacitor.getPlatform() === 'android') {
                     try {
