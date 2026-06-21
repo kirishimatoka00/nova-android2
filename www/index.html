@@ -3469,109 +3469,115 @@ return html;
         window.applyTheme = function(theme) {
             appState.theme = theme;
             localStorage.setItem('nova_theme', theme);
-            if(theme === 'light') {
-                document.documentElement.style.filter = 'invert(1) hue-rotate(180deg) brightness(1.05)';
-                document.documentElement.style.colorScheme = 'light';
-                let style = document.getElementById('light-theme-fix');
-                if(!style) {
-                    style = document.createElement('style'); style.id = 'light-theme-fix';
-                    style.innerHTML = `
-/* ── 白晝模式：還原圖片/媒體原色 ── */
-img, video, iframe, canvas, .keep-color, [style*="background-image"] {
-    filter: invert(1) hue-rotate(180deg) !important;
-}
-/* ── 白晝模式：彩色 Phosphor 圖示還原深色模式飽和度 ──
-   涵蓋：① 圖示本身帶色彩 class、② 圖示繼承父元素色彩、③ 漸層/彩色背景元素 */
-i[class*="ph"][class*="text-blue"],
-i[class*="ph"][class*="text-yellow"],
-i[class*="ph"][class*="text-amber"],
-i[class*="ph"][class*="text-emerald"],
-i[class*="ph"][class*="text-green"],
-i[class*="ph"][class*="text-rose"],
-i[class*="ph"][class*="text-red"],
-i[class*="ph"][class*="text-violet"],
-i[class*="ph"][class*="text-purple"],
-i[class*="ph"][class*="text-cyan"],
-i[class*="ph"][class*="text-sky"],
-i[class*="ph"][class*="text-teal"],
-i[class*="ph"][class*="text-orange"],
-i[class*="ph"][class*="text-pink"],
-i[class*="ph"][class*="text-indigo"],
-[class*="text-blue"] > i[class*="ph"],
-[class*="text-yellow"] > i[class*="ph"],
-[class*="text-amber"] > i[class*="ph"],
-[class*="text-emerald"] > i[class*="ph"],
-[class*="text-green"] > i[class*="ph"],
-[class*="text-rose"] > i[class*="ph"],
-[class*="text-red"] > i[class*="ph"],
-[class*="text-violet"] > i[class*="ph"],
-[class*="text-purple"] > i[class*="ph"],
-[class*="text-cyan"] > i[class*="ph"],
-[class*="text-sky"] > i[class*="ph"],
-[class*="text-teal"] > i[class*="ph"],
-[class*="text-orange"] > i[class*="ph"],
-[class*="text-pink"] > i[class*="ph"],
-[class*="text-indigo"] > i[class*="ph"],
-[class*="from-blue"],   [class*="from-violet"],
-[class*="from-emerald"],[class*="from-rose"],
-[class*="from-indigo"], [class*="from-purple"],
-[class*="from-cyan"],   [class*="from-teal"],
-[class*="from-amber"],  [class*="from-yellow"],
-[class*="from-green"],  [class*="from-red"],
-[class*="from-orange"], [class*="from-pink"],
-[class*="from-sky"],
-.bg-blue-600, .bg-emerald-600, .bg-rose-600, .bg-violet-600, .bg-slate-600,
-[style*="background:linear-gradient"],
-[style*="background: linear-gradient"],
-[style*="color:#60a5fa"], [style*="color:#fbbf24"], [style*="color:#34d399"],
-[style*="color:#38bdf8"], [style*="color:#a78bfa"], [style*="color:#f87171"],
-[style*="color:#4ade80"], [style*="color:#fb923c"], [style*="color:#e879f9"],
-[style*="background-color:#3b82f6"], [style*="background-color:#2563eb"],
-[style*="background:#3b82f6"], [style*="background:#2563eb"],
-/* ── 白晝模式：Emoji 還原原色 ──
-   設定 tab 按鈕（🔑🎙️✈️🎨⏺️📅）及主題卡 emoji span */
-button[id^="stab-"],
-#theme-btn-dark > .text-3xl,
-#theme-btn-light > .text-3xl {
-    filter: invert(1) hue-rotate(180deg) !important;
-}
-/* ── 白晝模式：彩色 label 還原（emoji + 文字顏色）──
-   Android 上 label 內的 emoji 及色彩文字需要 counter-invert */
-label[class*="text-blue"],   label[class*="text-yellow"],
-label[class*="text-amber"],  label[class*="text-emerald"],
-label[class*="text-green"],  label[class*="text-rose"],
-label[class*="text-red"],    label[class*="text-violet"],
-label[class*="text-purple"], label[class*="text-cyan"],
-label[class*="text-sky"],    label[class*="text-teal"],
-label[class*="text-orange"], label[class*="text-pink"],
-label[class*="text-indigo"],
-span[class*="text-blue"],    span[class*="text-yellow"],
-span[class*="text-amber"],   span[class*="text-emerald"],
-span[class*="text-green"],   span[class*="text-rose"],
-span[class*="text-red"],     span[class*="text-violet"],
-span[class*="text-purple"],  span[class*="text-cyan"],
-span[class*="text-sky"],     span[class*="text-teal"],
-span[class*="text-orange"],  span[class*="text-pink"],
-span[class*="text-indigo"] {
-    filter: invert(1) hue-rotate(180deg) !important;
-}
-/* ── 白晝模式：表單控制項直接覆寫 ──
-   Android WebView 的 native form control 不受 parent CSS filter 影響，
-   需直接設定顏色而非依賴 invert 濾鏡 */
-input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="button"]):not([type="submit"]),
-select,
-textarea {
-    background-color: #f1f5f9 !important;
-    color: #0f172a !important;
-    border-color: #94a3b8 !important;
-    color-scheme: light !important;
-}
-input::placeholder, textarea::placeholder {
-    color: #64748b !important;
-}`;
-                    document.head.appendChild(style);
-                }
-                // ★ Android：白晝模式 → 狀態列/導覽列改為白色
+
+            // 💡 真正的白晝配色系統（取代舊版 filter invert 模擬技巧）：
+            //    這份樣式表是掛遍全站實際用到的色相關 Tailwind class 後，
+            //    逐一分類處理生成的：
+            //    • slate 中性色（背景／文字／邊框）：依照 50↔950 對稱表精準反轉，
+            //      產生真正的淺色介面（不是用濾鏡反相模擬、沒有任何色域裁切損失）
+            //    • 強調色（藍、紅、綠、紫…）用在文字/圖示/按鈕：維持與黑夜模式
+            //      完全相同的色相與彩度（這正是之前要求「圖示彩度要與黑夜模式一樣」
+            //      的精神，現在用真正配色系統達成，不再依賴有數學限制的濾鏡換色技巧，
+            //      黃/琥珀/青色系也不會再失真）
+            //    • 深色強調色背景（如 bg-blue-900/30 提示框底色）：換成對應的淺色系
+            //      提示框底色，避免深色底色直接拿來部署在白色頁面上變成混濁的深色塊狀
+            //    並同步處理了兩個不是 Tailwind class、而是直接寫死在 <style> 裡的項目：
+            //    頁面根背景、overscroll 黑布、捲軸、自訂複製選單、audio 控制面板。
+            //    這份樣式表只有在 <html> 有 .theme-light class 時才生效，黑夜模式完全不受影響。
+            let style = document.getElementById('light-theme-fix');
+            if (!style) {
+                style = document.createElement('style'); style.id = 'light-theme-fix';
+                style.innerHTML = `
+                        .theme-light .bg-blue-800\/50 { background-color: #eff6ff !important; }
+                        .theme-light .bg-blue-900 { background-color: #eff6ff !important; }
+                        .theme-light .bg-blue-900\/30 { background-color: #eff6ff !important; }
+                        .theme-light .bg-blue-900\/50 { background-color: #eff6ff !important; }
+                        .theme-light .bg-emerald-800 { background-color: #ecfdf5 !important; }
+                        .theme-light .bg-emerald-800\/50 { background-color: #ecfdf5 !important; }
+                        .theme-light .bg-emerald-800\/60 { background-color: #ecfdf5 !important; }
+                        .theme-light .bg-emerald-900\/30 { background-color: #ecfdf5 !important; }
+                        .theme-light .bg-emerald-900\/40 { background-color: #ecfdf5 !important; }
+                        .theme-light .bg-emerald-900\/50 { background-color: #ecfdf5 !important; }
+                        .theme-light .bg-green-900\/50 { background-color: #f0fdf4 !important; }
+                        .theme-light .bg-orange-900\/40 { background-color: #fff7ed !important; }
+                        .theme-light .bg-purple-800\/50 { background-color: #faf5ff !important; }
+                        .theme-light .bg-purple-900\/20 { background-color: #faf5ff !important; }
+                        .theme-light .bg-purple-900\/50 { background-color: #faf5ff !important; }
+                        .theme-light .bg-purple-950\/30 { background-color: #faf5ff !important; }
+                        .theme-light .bg-red-800 { background-color: #fef2f2 !important; }
+                        .theme-light .bg-red-800\/50 { background-color: #fef2f2 !important; }
+                        .theme-light .bg-red-900\/30 { background-color: #fef2f2 !important; }
+                        .theme-light .bg-red-900\/50 { background-color: #fef2f2 !important; }
+                        .theme-light .bg-red-950\/95 { background-color: #fef2f2 !important; }
+                        .theme-light .bg-slate-600 { background-color: #94a3b8 !important; }
+                        .theme-light .bg-slate-700 { background-color: #cbd5e1 !important; }
+                        .theme-light .bg-slate-700\/50 { background-color: #cbd5e1 !important; }
+                        .theme-light .bg-slate-700\/60 { background-color: #cbd5e1 !important; }
+                        .theme-light .bg-slate-800 { background-color: #e2e8f0 !important; }
+                        .theme-light .bg-slate-800\/50 { background-color: #e2e8f0 !important; }
+                        .theme-light .bg-slate-800\/60 { background-color: #e2e8f0 !important; }
+                        .theme-light .bg-slate-800\/80 { background-color: #e2e8f0 !important; }
+                        .theme-light .bg-slate-900 { background-color: #f1f5f9 !important; }
+                        .theme-light .bg-slate-900\/50 { background-color: #f1f5f9 !important; }
+                        .theme-light .bg-slate-900\/60 { background-color: #f1f5f9 !important; }
+                        .theme-light .bg-slate-900\/80 { background-color: #f1f5f9 !important; }
+                        .theme-light .bg-slate-900\/95 { background-color: #f1f5f9 !important; }
+                        .theme-light .bg-slate-950 { background-color: #f8fafc !important; }
+                        .theme-light .bg-slate-950\/50 { background-color: #f8fafc !important; }
+                        .theme-light .bg-slate-950\/80 { background-color: #f8fafc !important; }
+                        .theme-light .bg-slate-950\/90 { background-color: #f8fafc !important; }
+                        .theme-light .border-cyan-700\/40 { border-color: #67e8f9 !important; }
+                        .theme-light .border-green-700\/50 { border-color: #86efac !important; }
+                        .theme-light .border-purple-700\/40 { border-color: #d8b4fe !important; }
+                        .theme-light .border-purple-800\/40 { border-color: #d8b4fe !important; }
+                        .theme-light .border-slate-300 { border-color: #334155 !important; }
+                        .theme-light .border-slate-400 { border-color: #475569 !important; }
+                        .theme-light .border-slate-500 { border-color: #64748b !important; }
+                        .theme-light .border-slate-600 { border-color: #94a3b8 !important; }
+                        .theme-light .border-slate-700 { border-color: #cbd5e1 !important; }
+                        .theme-light .border-slate-700\/50 { border-color: #cbd5e1 !important; }
+                        .theme-light .border-slate-800 { border-color: #e2e8f0 !important; }
+                        .theme-light .border-slate-800\/50 { border-color: #e2e8f0 !important; }
+                        .theme-light .border-white { border-color: #cbd5e1 !important; }
+                        .theme-light .from-blue-900\/30 { --tw-gradient-from: #eff6ff !important; }
+                        .theme-light .from-green-900\/30 { --tw-gradient-from: #f0fdf4 !important; }
+                        .theme-light .from-indigo-900 { --tw-gradient-from: #eef2ff !important; }
+                        .theme-light .from-sky-900\/30 { --tw-gradient-from: #f0f9ff !important; }
+                        .theme-light .from-slate-900 { --tw-gradient-from: #f1f5f9 !important; }
+                        .theme-light .placeholder-slate-500::placeholder { color: #64748b !important; }
+                        .theme-light .text-slate-100 { color: #0f172a !important; }
+                        .theme-light .text-slate-200 { color: #1e293b !important; }
+                        .theme-light .text-slate-300 { color: #334155 !important; }
+                        .theme-light .text-slate-400 { color: #475569 !important; }
+                        .theme-light .text-slate-500 { color: #64748b !important; }
+                        .theme-light .text-slate-600 { color: #94a3b8 !important; }
+                        .theme-light .text-white { color: #0f172a !important; }
+                        .theme-light .text-white\/60 { color: #0f172a !important; }
+                        .theme-light .text-white\/70 { color: #0f172a !important; }
+                        .theme-light .text-white\/80 { color: #0f172a !important; }
+                        .theme-light .to-blue-900\/30 { --tw-gradient-to: #eff6ff !important; }
+                        .theme-light .to-emerald-900\/30 { --tw-gradient-to: #ecfdf5 !important; }
+                        .theme-light .to-indigo-900\/30 { --tw-gradient-to: #eef2ff !important; }
+                        .theme-light .to-slate-800 { --tw-gradient-to: #e2e8f0 !important; }
+                        html.theme-light { background-color: #f8fafc !important; color-scheme: light; }
+                        html.theme-light body { background-color: #f8fafc !important; }
+                        html.theme-light body::after { background-color: #f8fafc !important; }
+                        html.theme-light ::-webkit-scrollbar-track { background: #e2e8f0 !important; }
+                        html.theme-light ::-webkit-scrollbar-thumb { background: #94a3b8 !important; }
+                        html.theme-light audio::-webkit-media-controls-panel { background-color: #e2e8f0 !important; color: #0f172a !important; }
+                        html.theme-light audio::-webkit-media-controls-current-time-display,
+                        html.theme-light audio::-webkit-media-controls-time-remaining-display { color: #0f172a !important; }
+                        html.theme-light #nova-copy-menu { background: #ffffff !important; border-color: #cbd5e1 !important; box-shadow: 0 8px 32px rgba(0,0,0,0.15) !important; }
+                        html.theme-light #nova-copy-menu button { color: #1e293b !important; }
+                        html.theme-light #nova-copy-menu button:active { background: #e2e8f0 !important; }
+                        html.theme-light #nova-copy-menu .menu-divider { background: #cbd5e1 !important; }
+                `;
+                document.head.appendChild(style);
+            }
+
+            if (theme === 'light') {
+                document.documentElement.classList.add('theme-light');
+                // ★ Android：白晝模式 → 狀態列/導航列改為白色
                 if (window.Capacitor && window.Capacitor.getPlatform() === 'android') {
                     try {
                         const { StatusBar } = Capacitor.Plugins;
@@ -3581,15 +3587,11 @@ input::placeholder, textarea::placeholder {
                         }
                     } catch(e) { console.warn('StatusBar light 設定失敗:', e); }
                 }
-                // 更新 meta theme-color（PWA 用）
                 const metaTheme = document.querySelector('meta[name="theme-color"]');
-                if (metaTheme) metaTheme.setAttribute('content', '#ffffff');
+                if (metaTheme) metaTheme.setAttribute('content', '#f8fafc');
             } else {
-                document.documentElement.style.filter = '';
-                document.documentElement.style.colorScheme = '';
-                const style = document.getElementById('light-theme-fix');
-                if(style) style.remove();
-                // ★ Android：深色模式 → 狀態列/導覽列恢復 App 深色
+                document.documentElement.classList.remove('theme-light');
+                // ★ Android：深色模式 → 狀態列/導航列恢復 App 深色
                 if (window.Capacitor && window.Capacitor.getPlatform() === 'android') {
                     try {
                         const { StatusBar } = Capacitor.Plugins;
@@ -3599,7 +3601,6 @@ input::placeholder, textarea::placeholder {
                         }
                     } catch(e) { console.warn('StatusBar dark 設定失敗:', e); }
                 }
-                // 更新 meta theme-color（PWA 用）
                 const metaTheme = document.querySelector('meta[name="theme-color"]');
                 if (metaTheme) metaTheme.setAttribute('content', '#020617');
             }
@@ -7299,7 +7300,7 @@ msg.text === "請詳細描述畫面中的內容。" || msg.text === `[夾帶檔�
                             </div>
                         </div>
                         <div class="flex gap-2 w-full">
-                            <button onclick="copyDeepLink('${ad.deepLinkUrl}')" class="flex-1 bg-slate-70 hover:bg-slate-600 text-white py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1">
+                            <button onclick="copyDeepLink('${ad.deepLinkUrl}')" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1">
                                 <i class="ph-bold ph-copy"></i> 複製連結
                             </button>
                             <a href="${ad.deepLinkUrl}" target="_blank" rel="noopener noreferrer" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 text-center">
