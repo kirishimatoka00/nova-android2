@@ -3471,6 +3471,7 @@ return html;
             localStorage.setItem('nova_theme', theme);
             if(theme === 'light') {
                 document.documentElement.style.filter = 'invert(1) hue-rotate(180deg) brightness(1.05)';
+                document.documentElement.style.colorScheme = 'light';
                 let style = document.getElementById('light-theme-fix');
                 if(!style) {
                     style = document.createElement('style'); style.id = 'light-theme-fix';
@@ -3526,6 +3527,40 @@ button[id^="stab-"],
 #theme-btn-dark > .text-3xl,
 #theme-btn-light > .text-3xl {
     filter: invert(1) hue-rotate(180deg) !important;
+}
+/* ── 白晝模式：彩色 label 還原（emoji + 文字顏色）──
+   Android 上 label 內的 emoji 及色彩文字需要 counter-invert */
+label[class*="text-blue"],   label[class*="text-yellow"],
+label[class*="text-amber"],  label[class*="text-emerald"],
+label[class*="text-green"],  label[class*="text-rose"],
+label[class*="text-red"],    label[class*="text-violet"],
+label[class*="text-purple"], label[class*="text-cyan"],
+label[class*="text-sky"],    label[class*="text-teal"],
+label[class*="text-orange"], label[class*="text-pink"],
+label[class*="text-indigo"],
+span[class*="text-blue"],    span[class*="text-yellow"],
+span[class*="text-amber"],   span[class*="text-emerald"],
+span[class*="text-green"],   span[class*="text-rose"],
+span[class*="text-red"],     span[class*="text-violet"],
+span[class*="text-purple"],  span[class*="text-cyan"],
+span[class*="text-sky"],     span[class*="text-teal"],
+span[class*="text-orange"],  span[class*="text-pink"],
+span[class*="text-indigo"] {
+    filter: invert(1) hue-rotate(180deg) !important;
+}
+/* ── 白晝模式：表單控制項直接覆寫 ──
+   Android WebView 的 native form control 不受 parent CSS filter 影響，
+   需直接設定顏色而非依賴 invert 濾鏡 */
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="button"]):not([type="submit"]),
+select,
+textarea {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-color: #94a3b8 !important;
+    color-scheme: light !important;
+}
+input::placeholder, textarea::placeholder {
+    color: #64748b !important;
 }`;
                     document.head.appendChild(style);
                 }
@@ -3544,6 +3579,7 @@ button[id^="stab-"],
                 if (metaTheme) metaTheme.setAttribute('content', '#ffffff');
             } else {
                 document.documentElement.style.filter = '';
+                document.documentElement.style.colorScheme = '';
                 const style = document.getElementById('light-theme-fix');
                 if(style) style.remove();
                 // ★ Android：深色模式 → 狀態列/導覽列恢復 App 深色
