@@ -11835,13 +11835,17 @@ if (appState.pendingAnalyzeContextId) {
 
         function validateBracketBalance(code) {
             if (!code || !code.trim()) return { valid: true, error: null };
-            // 移除字串與註解內容，避免裡面的括號字元干擾判斷
+            // 移除字串與註解內容，避免裡面的括號字元干擾判斷。
+            // 注意順序：必須先處理字串、最後才處理註解 —
+            // 因為字串內容常含有 # 字元（例如顏色色碼 "#7f8c8d"），
+            // 若先用註解規則處理，會把字串裡的 # 誤判成註解起點，
+            // 截斷字串導致後面所有括號配對全部錯位。
             const cleaned = code
-                .replace(/#.*$/gm, '')
                 .replace(/'''[\s\S]*?'''/g, '')
                 .replace(/"""[\s\S]*?"""/g, '')
                 .replace(/'(\\.|[^'\\])*'/g, "''")
-                .replace(/"(\\.|[^"\\])*"/g, '""');
+                .replace(/"(\\.|[^"\\])*"/g, '""')
+                .replace(/#.*$/gm, '');
             const pairs = { '(': ')', '[': ']', '{': '}' };
             const stack = [];
             for (const ch of cleaned) {
