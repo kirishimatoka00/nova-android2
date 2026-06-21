@@ -3474,7 +3474,59 @@ return html;
                 let style = document.getElementById('light-theme-fix');
                 if(!style) {
                     style = document.createElement('style'); style.id = 'light-theme-fix';
-                    style.innerHTML = `img, video, .keep-color, [style*="background-image"] { filter: invert(1) hue-rotate(180deg) !important; }`;
+                    style.innerHTML = `
+/* ── 白晝模式：還原圖片/媒體原色 ── */
+img, video, iframe, canvas, .keep-color, [style*="background-image"] {
+    filter: invert(1) hue-rotate(180deg) !important;
+}
+/* ── 白晝模式：彩色 Phosphor 圖示還原深色模式飽和度 ──
+   涵蓋：① 圖示本身帶色彩 class、② 圖示繼承父元素色彩、③ 漸層/彩色背景元素 */
+i[class*="ph"][class*="text-blue"],
+i[class*="ph"][class*="text-yellow"],
+i[class*="ph"][class*="text-amber"],
+i[class*="ph"][class*="text-emerald"],
+i[class*="ph"][class*="text-green"],
+i[class*="ph"][class*="text-rose"],
+i[class*="ph"][class*="text-red"],
+i[class*="ph"][class*="text-violet"],
+i[class*="ph"][class*="text-purple"],
+i[class*="ph"][class*="text-cyan"],
+i[class*="ph"][class*="text-sky"],
+i[class*="ph"][class*="text-teal"],
+i[class*="ph"][class*="text-orange"],
+i[class*="ph"][class*="text-pink"],
+i[class*="ph"][class*="text-indigo"],
+[class*="text-blue"] > i[class*="ph"],
+[class*="text-yellow"] > i[class*="ph"],
+[class*="text-amber"] > i[class*="ph"],
+[class*="text-emerald"] > i[class*="ph"],
+[class*="text-green"] > i[class*="ph"],
+[class*="text-rose"] > i[class*="ph"],
+[class*="text-red"] > i[class*="ph"],
+[class*="text-violet"] > i[class*="ph"],
+[class*="text-purple"] > i[class*="ph"],
+[class*="text-cyan"] > i[class*="ph"],
+[class*="text-sky"] > i[class*="ph"],
+[class*="text-teal"] > i[class*="ph"],
+[class*="text-orange"] > i[class*="ph"],
+[class*="text-pink"] > i[class*="ph"],
+[class*="text-indigo"] > i[class*="ph"],
+[class*="bg-gradient"],
+.bg-blue-600, .bg-emerald-600, .bg-rose-600, .bg-violet-600, .bg-slate-600,
+[style*="background:linear-gradient"],
+[style*="background: linear-gradient"],
+[style*="color:#60a5fa"], [style*="color:#fbbf24"], [style*="color:#34d399"],
+[style*="color:#38bdf8"], [style*="color:#a78bfa"], [style*="color:#f87171"],
+[style*="color:#4ade80"], [style*="color:#fb923c"], [style*="color:#e879f9"],
+[style*="background-color:#3b82f6"], [style*="background-color:#2563eb"],
+[style*="background:#3b82f6"], [style*="background:#2563eb"],
+/* ── 白晝模式：Emoji 還原原色 ──
+   設定 tab 按鈕（🔑🎙️✈️🎨⏺️📅）及主題卡 emoji span */
+button[id^="stab-"],
+#theme-btn-dark > .text-3xl,
+#theme-btn-light > .text-3xl {
+    filter: invert(1) hue-rotate(180deg) !important;
+}`;
                     document.head.appendChild(style);
                 }
                 // ★ Android：白晝模式 → 狀態列/導覽列改為白色
