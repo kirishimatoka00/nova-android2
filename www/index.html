@@ -3945,6 +3945,212 @@ return html;
                         /* ── Page root background ── */
                         html.theme-light body { background-color: #f9fafb !important; }
                         html.theme-light .flex.h-\[100dvh\] { background-color: #f9fafb !important; }
+                        
+                        /* ============================================================
+                           NOVA Light Mode — Claude-style Universal Button Reset
+                           All buttons: #f3f4f6 bg + #111827 text + #d1d5db border
+                           Exceptions: primary blue, destructive red, active tabs
+                           ============================================================ */
+                        
+                        /* 1. Universal button base */
+                        html.theme-light button,
+                        html.theme-light label.btn,
+                        html.theme-light label[role="button"] {
+                            background-color: #f3f4f6 !important;
+                            color: #111827 !important;
+                            border-color: #d1d5db !important;
+                        }
+                        html.theme-light button:hover,
+                        html.theme-light label.btn:hover {
+                            background-color: #e5e7eb !important;
+                            color: #111827 !important;
+                        }
+                        
+                        /* 2. Icon-only ghost buttons (no bg, just tap target) */
+                        html.theme-light button.p-1,
+                        html.theme-light button.p-1\.5,
+                        html.theme-light button.p-2,
+                        html.theme-light button[class*="hover:text-"] {
+                            background-color: transparent !important;
+                            border-color: transparent !important;
+                            color: #374151 !important;
+                        }
+                        html.theme-light button[class*="hover:text-red"] { color: #6b7280 !important; }
+                        html.theme-light button[class*="hover:text-red"]:hover { color: #dc2626 !important; background-color: #fee2e2 !important; }
+                        html.theme-light button[class*="hover:text-blue"]:hover { color: #2563eb !important; background-color: #eff6ff !important; }
+                        html.theme-light button[class*="hover:text-emerald"]:hover { color: #059669 !important; background-color: #ecfdf5 !important; }
+                        html.theme-light button[class*="hover:text-purple"]:hover { color: #7c3aed !important; background-color: #f5f3ff !important; }
+                        html.theme-light button[class*="hover:text-yellow"]:hover { color: #d97706 !important; background-color: #fffbeb !important; }
+                        
+                        /* 3. Primary blue buttons — keep blue */
+                        html.theme-light button[class*="bg-blue-6"],
+                        html.theme-light button[class*="bg-blue-7"] {
+                            background-color: #2563eb !important;
+                            color: #ffffff !important;
+                            border-color: #1d4ed8 !important;
+                        }
+                        html.theme-light button[class*="bg-blue-6"]:hover,
+                        html.theme-light button[class*="bg-blue-7"]:hover {
+                            background-color: #1d4ed8 !important;
+                        }
+                        
+                        /* 4. Destructive red buttons — keep red */
+                        html.theme-light button[class*="bg-red-6"],
+                        html.theme-light button[class*="bg-red-7"] {
+                            background-color: #dc2626 !important;
+                            color: #ffffff !important;
+                            border-color: #b91c1c !important;
+                        }
+                        html.theme-light button[class*="bg-red-6"]:hover,
+                        html.theme-light button[class*="bg-red-7"]:hover {
+                            background-color: #b91c1c !important;
+                        }
+                        
+                        /* 5. Settings active tab chips — keep accent color, override bg */
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-blue-6"] {
+                            background-color: #2563eb !important;
+                            color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-purple-6"] {
+                            background-color: #7c3aed !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-emerald-"] {
+                            background-color: #059669 !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-cyan-"] {
+                            background-color: #0891b2 !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-amber-"] {
+                            background-color: #d97706 !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"]:not([class*="bg-blue-6"]):not([class*="bg-purple-"]):not([class*="bg-emerald-"]):not([class*="bg-cyan-"]):not([class*="bg-amber-"]) {
+                            background-color: transparent !important;
+                            color: #374151 !important;
+                            border-color: transparent !important;
+                        }
+                        
+                        /* 6. Small accent-colored action chips (Canvas controls) */
+                        html.theme-light button[class*="bg-emerald-9"],
+                        html.theme-light button[class*="bg-blue-9"] {
+                            background-color: #f3f4f6 !important;
+                            color: #111827 !important;
+                            border-color: #d1d5db !important;
+                        }
+                        html.theme-light button[class*="text-emerald-4"][class*="bg-emerald-9"]:hover { color: #059669 !important; }
+                        html.theme-light button[class*="text-blue-4"][class*="bg-blue-9"]:hover { color: #2563eb !important; }
+                        
+                        /* 7. 完整備份 / 還原備份 / calendar action buttons */
+                        html.theme-light button[onclick*="exportSettings"],
+                        html.theme-light label[for="import-settings-file"] {
+                            background-color: #f3f4f6 !important;
+                            border: 1px solid #d1d5db !important;
+                            color: #374151 !important;
+                        }
+                        html.theme-light button[onclick*="calRefreshPreview"],
+                        html.theme-light button[onclick*="calRescheduleNow"] {
+                            background-color: #f3f4f6 !important;
+                            border: 1px solid #d1d5db !important;
+                            color: #374151 !important;
+                        }
+                        
+                        /* 8. 在 Canvas 執行 big gradient button — keep as-is (it's iconic/functional) */
+                        html.theme-light button[class*="bg-gradient-to-r"][class*="from-blue"] {
+                            background: linear-gradient(to right, #2563eb, #0891b2) !important;
+                            color: #ffffff !important;
+                            border-color: transparent !important;
+                        }
+                        
+                        /* 9. 選擇 folder button */
+                        html.theme-light button[onclick*="pickRecording"],
+                        html.theme-light button[onclick*="pickDirectory"] {
+                            background-color: #f3f4f6 !important;
+                            border: 1px solid #d1d5db !important;
+                            color: #374151 !important;
+                        }
+                        
+                        /* 10. Modal cancel/secondary */
+                        html.theme-light button[class*="bg-slate-7"]:not([class*="bg-blue-"]),
+                        html.theme-light button[class*="bg-slate-8"]:not([class*="bg-blue-"]),
+                        html.theme-light button[class*="bg-slate-9"]:not([class*="bg-blue-"]) {
+                            background-color: #f3f4f6 !important;
+                            color: #111827 !important;
+                            border-color: #d1d5db !important;
+                        }
+                        html.theme-light button[class*="bg-slate-7"]:hover:not([class*="bg-blue-"]),
+                        html.theme-light button[class*="bg-slate-8"]:hover:not([class*="bg-blue-"]),
+                        html.theme-light button[class*="bg-slate-9"]:hover:not([class*="bg-blue-"]) {
+                            background-color: #e5e7eb !important;
+                        }
+                        
+                        /* 11. Theme selection cards in appearance tab */
+                        html.theme-light #settings-modal [id^="theme-btn-"] {
+                            background-color: #f9fafb !important;
+                            border-color: #d1d5db !important;
+                            color: #111827 !important;
+                        }
+                        html.theme-light #settings-modal #theme-btn-light[class*="border-yellow"] {
+                            border-color: #f59e0b !important;
+                            background-color: #fffbeb !important;
+                        }
+                        html.theme-light #settings-modal #theme-btn-dark[class*="border-blue"] {
+                            border-color: #3b82f6 !important;
+                            background-color: #eff6ff !important;
+                        }
+                        
+                        /* 12. Pill chips (連網搜尋, 清空對話 top bar) */
+                        html.theme-light #web-search-badge,
+                        html.theme-light button[onclick*="clearChat"],
+                        html.theme-light button[onclick*="clearConv"],
+                        html.theme-light button[onclick*="清空"] {
+                            background-color: #f3f4f6 !important;
+                            border: 1px solid #d1d5db !important;
+                            color: #374151 !important;
+                        }
+                        
+                        /* 13. Rounded record/mic/voice big button */
+                        html.theme-light button[class*="rounded-full"][class*="bg-slate"] {
+                            background-color: #f3f4f6 !important;
+                            border-color: #d1d5db !important;
+                            color: #374151 !important;
+                        }
+                        
+                        /* 14. All accent-colored non-blue/red buttons → gray */
+                        html.theme-light button[class*="bg-purple-6"],
+                        html.theme-light button[class*="bg-indigo-6"],
+                        html.theme-light button[class*="bg-emerald-6"],
+                        html.theme-light button[class*="bg-emerald-7"],
+                        html.theme-light button[class*="bg-green-6"],
+                        html.theme-light button[class*="bg-teal-6"],
+                        html.theme-light button[class*="bg-orange-7"],
+                        html.theme-light button[class*="bg-yellow-6"],
+                        html.theme-light button[class*="bg-cyan-6"],
+                        html.theme-light button[class*="bg-rose-6"],
+                        html.theme-light button[class*="bg-pink-6"] {
+                            background-color: #f3f4f6 !important;
+                            color: #111827 !important;
+                            border-color: #d1d5db !important;
+                        }
+                        
+                        /* But keep settings active tabs correct (already handled above) */
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-purple-6"] {
+                            background-color: #7c3aed !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-emerald-"] {
+                            background-color: #059669 !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-cyan-"] {
+                            background-color: #0891b2 !important; color: #ffffff !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-amber-"] {
+                            background-color: #d97706 !important; color: #ffffff !important;
+                        }
+                        
+                        /* 15. Text links that look like buttons */
+                        html.theme-light a[class*="bg-slate"] {
+                            background-color: #f3f4f6 !important;
+                            color: #374151 !important;
+                            border-color: #d1d5db !important;
+                        }
                 `;
                 document.head.appendChild(style);
             }
