@@ -690,11 +690,8 @@
         <!-- ================= 左側邊欄 ================= -->
         <aside class="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 p-4 flex-shrink-0 z-10 overflow-hidden relative">
             <div class="flex items-center space-x-3 mb-6 px-2 shrink-0">
-                <div class="w-8 h-8 bg-gradient-to-tr from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                    <i class="ph-bold ph-infinity text-white text-lg"></i>
-                </div>
-                <div class="overflow-hidden">
-                    <h1 class="text-lg font-bold text-white tracking-wide truncate">NOVA 120</h1>
+                <div class="w-10 h-10 bg-gradient-to-tr from-blue-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <i class="ph-bold ph-infinity text-white text-xl"></i>
                 </div>
             </div>
             
@@ -752,8 +749,8 @@
         <!-- ================= 主要內容顯示區 ================= -->
         <main class="flex-1 flex flex-col relative bg-slate-950 overflow-hidden min-h-0">
             <!-- 手機版頂部導航列 -->
-            <div class="md:hidden flex items-center justify-between p-3 bg-slate-900 border-b border-slate-800 z-30 shrink-0">
-                <div class="flex items-center space-x-2 shrink-0"><i class="ph-bold ph-infinity text-blue-500 text-xl"></i><span class="font-bold text-white">Nova 120 SSP</span></div>
+            <div class="md:hidden flex items-center justify-between p-3 bg-transparent z-30 shrink-0">
+                <div class="flex items-center space-x-2 shrink-0"><div class="w-8 h-8 bg-gradient-to-tr from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center shadow-sm"><i class="ph-bold ph-infinity text-white text-base"></i></div></div>
                 <div class="flex items-center space-x-3 ml-auto pl-2">
                     <div class="flex items-center space-x-1 bg-slate-800/50 px-2 py-1 rounded-lg border border-slate-700/50 cursor-pointer active:scale-95 transition-transform" onclick="cycleManualLocation()">
                         <i id="mobile-weather-icon" class="ph-fill ph-navigation-arrow text-blue-400"></i><span id="mobile-weather-temp" class="text-xs font-bold text-white whitespace-nowrap">更新</span>
@@ -768,7 +765,6 @@
                 <div class="flex items-center justify-between p-4 border-b border-slate-800 shrink-0">
                     <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 bg-gradient-to-tr from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center"><i class="ph-bold ph-infinity text-white"></i></div>
-                        <span class="text-lg font-bold text-white">NOVA 120</span>
                     </div>
                     <button onclick="toggleMobileMenu()" class="text-slate-400 hover:text-white"><i class="ph-bold ph-x text-2xl"></i></button>
                 </div>
@@ -1488,7 +1484,7 @@
                     <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-700 relative"></div>
                     
                     <!-- Line 風格底部輸入區塊 -->
-                    <div class="bg-slate-900 border-t border-slate-800 shrink-0 z-20 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex flex-col relative w-full">
+                    <div class="bg-slate-900 shrink-0 z-20 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex flex-col relative w-full">
                          
                         <div id="chat-file-preview-container" class="hidden relative flex-wrap gap-2 bg-slate-900 p-2 m-2 rounded-lg self-start">
                             </div>
@@ -4151,6 +4147,304 @@ return html;
                             color: #374151 !important;
                             border-color: #d1d5db !important;
                         }
+                        
+                        /* ================================================================
+                           NOVA Light Mode Supplemental — v2 contrast & component fixes
+                           Following Gemini/Claude App design:
+                           - #1f2937 dark gray body text
+                           - #f3f4f6 / #e5e7eb for subtle button/chip backgrounds  
+                           - #6b7280 for secondary text
+                           - #374151 for labels
+                           - Blue toggles, visible knob
+                           ================================================================ */
+                        
+                        /* ── Typography: body text & labels ── */
+                        html.theme-light body,
+                        html.theme-light .text-slate-200,
+                        html.theme-light .text-slate-300 { color: #374151 !important; }
+                        html.theme-light .text-slate-400 { color: #6b7280 !important; }
+                        html.theme-light .text-slate-500 { color: #9ca3af !important; }
+                        html.theme-light .text-white     { color: #111827 !important; }
+                        
+                        /* Settings modal header */
+                        html.theme-light #settings-modal h3 { color: #111827 !important; }
+                        html.theme-light #settings-modal .text-white  { color: #111827 !important; }
+                        html.theme-light #settings-modal .text-slate-200,
+                        html.theme-light #settings-modal .text-slate-300 { color: #374151 !important; }
+                        html.theme-light #settings-modal .text-slate-400,
+                        html.theme-light #settings-modal .text-slate-500 { color: #6b7280 !important; }
+                        
+                        /* ── Toggle switches: track + knob ── */
+                        /* Unchecked track: light gray */
+                        html.theme-light .peer ~ div[class*="bg-slate-700"][class*="rounded-full"] { background-color: #d1d5db !important; }
+                        /* Checked track: keep accent color (via peer-checked:bg-*) */
+                        html.theme-light .peer:checked ~ div[class*="peer-checked:bg-purple-500"]  { background-color: #8b5cf6 !important; }
+                        html.theme-light .peer:checked ~ div[class*="peer-checked:bg-emerald-5"]   { background-color: #10b981 !important; }
+                        html.theme-light .peer:checked ~ div[class*="peer-checked:bg-cyan-500"]    { background-color: #06b6d4 !important; }
+                        html.theme-light .peer:checked ~ div[class*="peer-checked:bg-green-500"]   { background-color: #22c55e !important; }
+                        html.theme-light .peer:checked ~ div[class*="peer-checked:bg-blue-500"]    { background-color: #3b82f6 !important; }
+                        /* Toggle knob: always white with shadow */
+                        html.theme-light [class*="peer"][class*="rounded-full"]::after,
+                        html.theme-light div[class*="after:bg-white"][class*="rounded-full"]::after {
+                            background-color: #ffffff !important;
+                            border-color: #d1d5db !important;
+                            box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+                        }
+                        
+                        /* ── Top toolbar chips ── */
+                        /* 連網搜尋 badge */
+                        html.theme-light #web-search-badge {
+                            background-color: #eff6ff !important;
+                            border-color: #bfdbfe !important;
+                            color: #1d4ed8 !important;
+                        }
+                        /* 清空對話 button */
+                        html.theme-light button[onclick*="clearChatHistory"] {
+                            background-color: #f9fafb !important;
+                            border-color: #d1d5db !important;
+                            color: #6b7280 !important;
+                        }
+                        /* Top bar container */
+                        html.theme-light [class*="bg-slate-900\\/50"][class*="border-b"][class*="border-slate-800"] {
+                            background-color: rgba(255,255,255,0.9) !important;
+                            border-color: #e5e7eb !important;
+                            backdrop-filter: blur(8px) !important;
+                        }
+                        
+                        /* ── Model selector dropdowns ── */
+                        html.theme-light #gemini-sub-model-select {
+                            background-color: #eff6ff !important;
+                            border-color: #bfdbfe !important;
+                            color: #1d4ed8 !important;
+                        }
+                        html.theme-light #grok-sub-model-select,
+                        html.theme-light #main-model-select {
+                            background-color: #f9fafb !important;
+                            border-color: #d1d5db !important;
+                            color: #1f2937 !important;
+                        }
+                        
+                        /* ── Settings tab bar ── */
+                        html.theme-light #settings-modal [class*="flex"][class*="gap-1"][class*="bg-slate-800"],
+                        html.theme-light #settings-modal div.flex.gap-1 {
+                            background-color: #f1f5f9 !important;
+                            border-radius: 0.75rem !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"]:not([class*="bg-blue-6"]):not([class*="bg-purple-"]):not([class*="bg-emerald-"]):not([class*="bg-cyan-"]):not([class*="bg-amber-"]) {
+                            color: #374151 !important;
+                        }
+                        html.theme-light #settings-modal [id^="stab-"]:not([class*="bg-blue-6"]):not([class*="bg-purple-"]):not([class*="bg-emerald-"]):not([class*="bg-cyan-"]):not([class*="bg-amber-"]):hover {
+                            background-color: #e5e7eb !important;
+                        }
+                        
+                        /* ── Backup/restore buttons at bottom of settings ── */
+                        html.theme-light button[onclick*="exportSettings"],
+                        html.theme-light label[for="import-settings-input"] {
+                            background-color: #f1f5f9 !important;
+                            border-color: #cbd5e1 !important;
+                            color: #374151 !important;
+                        }
+                        html.theme-light button[onclick*="exportSettings"] i,
+                        html.theme-light label[for="import-settings-input"] i { color: #4b5563 !important; }
+                        
+                        /* ── Calendar settings: 重新整理 / 立即排程通知 buttons ── */
+                        html.theme-light button[onclick*="calRefreshPreview"] {
+                            background-color: #f0fdf4 !important;
+                            border: 1px solid #86efac !important;
+                            color: #166534 !important;
+                        }
+                        html.theme-light button[onclick*="calRescheduleNow"] {
+                            background-color: #ecfdf5 !important;
+                            border: 1px solid #6ee7b7 !important;
+                            color: #065f46 !important;
+                        }
+                        
+                        /* ── Settings input fields ── */
+                        html.theme-light #settings-modal input,
+                        html.theme-light #settings-modal select,
+                        html.theme-light #settings-modal textarea {
+                            background-color: #ffffff !important;
+                            border-color: #d1d5db !important;
+                            color: #111827 !important;
+                        }
+                        html.theme-light #settings-modal input::placeholder { color: #9ca3af !important; }
+                        
+                        /* ── Settings section cards ── */
+                        html.theme-light #settings-modal .bg-slate-800\/60,
+                        html.theme-light #settings-modal [class*="bg-slate-800"],
+                        html.theme-light #settings-modal [class*="bg-slate-700"] {
+                            background-color: #f9fafb !important;
+                            border-color: #e5e7eb !important;
+                        }
+                        html.theme-light #settings-modal [class*="bg-slate-900"],
+                        html.theme-light #settings-modal [class*="bg-slate-950"] {
+                            background-color: #ffffff !important;
+                            border-color: #e5e7eb !important;
+                        }
+                        html.theme-light #settings-modal [class*="from-blue-900"],
+                        html.theme-light #settings-modal [class*="from-indigo-900"] {
+                            background: linear-gradient(to right, #eff6ff, #eef2ff) !important;
+                            border-color: #c7d2fe !important;
+                        }
+                        
+                        /* ── Recording tab: yellow 選擇 button stays yellow ── */
+                        html.theme-light button[onclick*="pickRecordingDirectory"] {
+                            background-color: #d97706 !important;
+                            color: #ffffff !important;
+                        }
+                        
+                        /* ── Canvas code block card (inline style, target by data-enc attr) ── */
+                        html.theme-light [data-enc] {
+                            background: linear-gradient(135deg, #eff6ff, #f0f9ff) !important;
+                            border-color: #bfdbfe !important;
+                        }
+                        html.theme-light [data-enc] p:first-child { color: #1e293b !important; }
+                        html.theme-light [data-enc] p:last-child  { color: #2563eb !important; }
+                        html.theme-light [data-enc] > div:last-child {
+                            background: rgba(37,99,235,0.12) !important;
+                            border-color: rgba(37,99,235,0.3) !important;
+                            color: #1d4ed8 !important;
+                        }
+                        
+                        /* ── Inline code spans ── */
+                        html.theme-light code { background-color: #f1f5f9 !important; color: #374151 !important; }
+                        
+                        /* ── User message bubble ── */
+                        html.theme-light [class*="bg-slate-800"][class*="rounded-2xl"] {
+                            background-color: #e9eef6 !important;
+                            color: #111827 !important;
+                        }
+                        
+                        /* ── Note cards ── */
+                        html.theme-light .bg-slate-900.rounded-2xl,
+                        html.theme-light [class*="bg-slate-900"][class*="rounded-2xl"] {
+                            background-color: #ffffff !important;
+                            border-color: #e5e7eb !important;
+                        }
+                        html.theme-light .note-html-content { color: #374151 !important; }
+                        html.theme-light .note-html-content::after {
+                            background-image: linear-gradient(to top, #ffffff, transparent) !important;
+                        }
+                        
+                        /* ── Mobile menu ── */
+                        html.theme-light #mobile-menu {
+                            background: rgba(248,250,252,0.98) !important;
+                            backdrop-filter: blur(12px) !important;
+                        }
+                        html.theme-light #mobile-menu .text-white   { color: #111827 !important; }
+                        html.theme-light #mobile-menu .text-slate-400 { color: #6b7280 !important; }
+                        html.theme-light #mobile-menu [class*="bg-slate-800"] { background-color: #f3f4f6 !important; }
+                        html.theme-light #mobile-menu button { color: #374151 !important; }
+                        html.theme-light #mobile-menu .text-blue-400 { color: #2563eb !important; }
+                        html.theme-light #mobile-menu border-b { border-color: #e5e7eb !important; }
+                        
+                        /* ── Input bar & plus menu ── */
+                        html.theme-light #plus-menu,
+                        html.theme-light [id^="plus-menu"] {
+                            background-color: #ffffff !important;
+                            border-color: #e5e7eb !important;
+                        }
+                        html.theme-light [class*="bg-slate-800"][class*="rounded-full"] {
+                            background-color: #f3f4f6 !important;
+                        }
+                        html.theme-light [class*="bg-slate-800"][class*="text-slate-3"] { color: #374151 !important; }
+                        
+                        /* ── System / AI message text ── */
+                        html.theme-light .text-slate-200 { color: #1f2937 !important; }
+                        html.theme-light [class*="text-slate-300"] { color: #374151 !important; }
+                        
+                        /* ── Page root background ── */
+                        html.theme-light body { background-color: #f9fafb !important; }
+                        html.theme-light .flex.h-\[100dvh\] { background-color: #f9fafb !important; }
+                        
+                        /* ── Change 1: Gemini circle icon → light gray ── */
+                        html.theme-light #status-icon.ph-globe,
+                        html.theme-light [id*="model-icon"],
+                        html.theme-light .bg-blue-600 > i[class*="ph-globe"],
+                        html.theme-light i[class*="ph-globe"].text-blue-400 { color: #6b7280 !important; }
+                        /* AI avatar circles in chat */
+                        html.theme-light .rounded-full.bg-blue-600,
+                        html.theme-light .rounded-full[class*="bg-blue-6"],
+                        html.theme-light div.w-9.h-9.rounded-full[class*="bg-"],
+                        html.theme-light div.w-8.h-8.rounded-full[class*="bg-"],
+                        html.theme-light div[class*="w-9"][class*="h-9"][class*="rounded-full"][class*="bg-blue"],
+                        html.theme-light div[class*="w-8"][class*="h-8"][class*="rounded-full"][class*="bg-blue"] {
+                            background-color: #f3f4f6 !important;
+                            color: #374151 !important;
+                        }
+                        html.theme-light div[class*="rounded-full"][class*="bg-blue"] i { color: #374151 !important; }
+                        
+                        /* ── Change 2: Folder icons → gray (not green/emerald) ── */
+                        html.theme-light i.ph-fill.ph-folder,
+                        html.theme-light i.ph-fill.ph-folder-open,
+                        html.theme-light i[class*="ph-folder"].text-emerald-400,
+                        html.theme-light i[class*="ph-folder"].text-green-400 {
+                            color: #9ca3af !important;
+                        }
+                        /* folder-plus button in sidebar */
+                        html.theme-light button[onclick*="addChatFolder"],
+                        html.theme-light button[onclick*="openChatFolder"] {
+                            background-color: #f3f4f6 !important;
+                            color: #374151 !important;
+                            border-color: #d1d5db !important;
+                        }
+                        html.theme-light button[onclick*="addChatFolder"] i { color: #6b7280 !important; }
+                        
+                        /* folder move button inline style override */
+                        html.theme-light button[onclick*="openMoveFolderModal"] {
+                            color: #9ca3af !important;
+                        }
+                        html.theme-light button[onclick*="openMoveFolderModal"] i { color: #9ca3af !important; }
+                        
+                        /* ── Change 5: Settings - all text dark gray/black, no highlight colors ── */
+                        html.theme-light #settings-modal [class*="text-blue-3"],
+                        html.theme-light #settings-modal [class*="text-blue-4"],
+                        html.theme-light #settings-modal [class*="text-cyan-3"],
+                        html.theme-light #settings-modal [class*="text-cyan-4"],
+                        html.theme-light #settings-modal [class*="text-teal-3"],
+                        html.theme-light #settings-modal [class*="text-teal-4"],
+                        html.theme-light #settings-modal [class*="text-emerald-3"],
+                        html.theme-light #settings-modal [class*="text-emerald-4"],
+                        html.theme-light #settings-modal [class*="text-green-3"],
+                        html.theme-light #settings-modal [class*="text-green-4"],
+                        html.theme-light #settings-modal [class*="text-purple-3"],
+                        html.theme-light #settings-modal [class*="text-purple-4"],
+                        html.theme-light #settings-modal [class*="text-violet-3"],
+                        html.theme-light #settings-modal [class*="text-violet-4"],
+                        html.theme-light #settings-modal [class*="text-indigo-3"],
+                        html.theme-light #settings-modal [class*="text-indigo-4"],
+                        html.theme-light #settings-modal [class*="text-sky-3"],
+                        html.theme-light #settings-modal [class*="text-sky-4"],
+                        html.theme-light #settings-modal [class*="text-orange-3"],
+                        html.theme-light #settings-modal [class*="text-orange-4"],
+                        html.theme-light #settings-modal [class*="text-yellow-3"],
+                        html.theme-light #settings-modal [class*="text-yellow-4"],
+                        html.theme-light #settings-modal [class*="text-amber-3"],
+                        html.theme-light #settings-modal [class*="text-amber-4"],
+                        html.theme-light #settings-modal [class*="text-red-3"],
+                        html.theme-light #settings-modal [class*="text-red-4"],
+                        html.theme-light #settings-modal [class*="text-rose-3"],
+                        html.theme-light #settings-modal [class*="text-rose-4"] {
+                            color: #374151 !important;
+                        }
+                        /* Keep active tab label color (inside the active tab chip it should remain white) */
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-blue-6"] span,
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-purple-6"] span,
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-emerald-"] span,
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-cyan-"] span,
+                        html.theme-light #settings-modal [id^="stab-"][class*="bg-amber-"] span { color: #ffffff !important; }
+                        /* Icons in settings labels */
+                        html.theme-light #settings-modal label i,
+                        html.theme-light #settings-modal p i,
+                        html.theme-light #settings-modal span i { color: #6b7280 !important; }
+                        html.theme-light #settings-modal h3 i { color: #374151 !important; }
+                        
+                        /* ── Change 7 light mode: top/bottom bars also borderless ── */
+                        html.theme-light .md\:hidden[class*="bg-transparent"] { background-color: #f9fafb !important; }
+                        html.theme-light [class*="bg-slate-900"][class*="shrink-0"][class*="z-20"] { border-top: none !important; }
+                        
+                        /* ── Plus menu also borderless ── */
+                        html.theme-light #plus-menu { border-top: none !important; box-shadow: 0 -4px 20px rgba(0,0,0,0.08) !important; }
                 `;
                 document.head.appendChild(style);
             }
@@ -15159,36 +15453,36 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
 
         <!-- Canvas Header -->
         <div id="nova-canvas-header"
-             style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f172a;border-bottom:1px solid #1e293b;flex-shrink:0;min-height:52px;">
+             style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#ffffff;border-bottom:1px solid #e5e7eb;flex-shrink:0;min-height:52px;">
             <!-- 返回聊天 -->
             <button onclick="novaCanvas.hide()"
-                    style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#1e293b;color:#94a3b8;flex-shrink:0;border:none;cursor:pointer;"
+                    style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#f3f4f6;color:#374151;flex-shrink:0;border:1px solid #e5e7eb;cursor:pointer;"
                     ontouchstart="" class="active:scale-90 transition-transform">
                 <i class="ph-bold ph-arrow-left" style="font-size:18px;"></i>
             </button>
             <!-- 標題 -->
             <div style="flex:1;overflow:hidden;">
-                <p id="nova-canvas-title" style="font-size:13px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Canvas 工作區</p>
-                <p id="nova-canvas-lang" style="font-size:10px;color:#64748b;margin-top:1px;">HTML</p>
+                <p id="nova-canvas-title" style="font-size:13px;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Canvas 工作區</p>
+                <p id="nova-canvas-lang" style="font-size:10px;color:#6b7280;margin-top:1px;">HTML</p>
             </div>
             <!-- 工具列 -->
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                 <!-- 重新整理 -->
                 <button onclick="novaCanvas.refresh()"
-                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
+                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;cursor:pointer;"
                         ontouchstart="" class="active:scale-90 transition-transform" title="重新整理">
                     <i class="ph-bold ph-arrow-clockwise" style="font-size:16px;"></i>
                 </button>
                 <!-- 切換：預覽 / 原始碼 -->
                 <button id="nova-canvas-mode-btn" onclick="novaCanvas.toggleMode()"
-                        style="display:flex;align-items:center;gap:4px;padding:0 10px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;font-size:11px;font-weight:700;"
+                        style="display:flex;align-items:center;gap:4px;padding:0 10px;height:34px;border-radius:9px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;cursor:pointer;font-size:11px;font-weight:700;"
                         ontouchstart="" class="active:scale-90 transition-transform">
                     <i id="nova-canvas-mode-icon" class="ph-bold ph-eye" style="font-size:15px;"></i>
                     <span id="nova-canvas-mode-label">預覽</span>
                 </button>
                 <!-- 複製程式碼 -->
                 <button onclick="novaCanvas.copyCode()"
-                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#1e293b;color:#64748b;border:none;cursor:pointer;"
+                        style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;cursor:pointer;"
                         ontouchstart="" class="active:scale-90 transition-transform" title="複製程式碼">
                     <i class="ph-bold ph-copy" style="font-size:16px;"></i>
                 </button>
@@ -15219,10 +15513,10 @@ if (t.repeatInterval && t.repeatInterval > 0) { t.alertTime += t.repeatInterval;
         </div>
 
         <!-- Canvas 底部狀態列 -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#0f172a;border-top:1px solid #1e293b;flex-shrink:0;min-height:40px;">
-            <p id="nova-canvas-status" style="font-size:10px;color:#475569;">就緒</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#ffffff;border-top:1px solid #e5e7eb;flex-shrink:0;min-height:40px;">
+            <p id="nova-canvas-status" style="font-size:10px;color:#6b7280;">就緒</p>
             <button onclick="novaCanvas.hide()"
-                    style="font-size:11px;font-weight:700;color:#3b82f6;background:none;border:none;cursor:pointer;padding:4px 8px;">
+                    style="font-size:11px;font-weight:700;color:#2563eb;background:none;border:none;cursor:pointer;padding:4px 8px;">
                 ← 返回對話
             </button>
         </div>
