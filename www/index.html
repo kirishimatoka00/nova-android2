@@ -5247,6 +5247,116 @@ return html;
                         html.theme-light .nova-chat-item button { color: #9ca3af !important; }
                         html.theme-light .nova-chat-item-active i,
                         html.theme-light .nova-chat-item-active button { color: #6b7280 !important; }
+                        
+                        /* ══════════════════════════════════════════════════════
+                           Fix 1: 多AI深度協同研究 modal — light-mode overrides
+                           ══════════════════════════════════════════════════════ */
+                        html.theme-light #agent-modal {
+                            background-color: rgba(100,116,139,0.4) !important;
+                        }
+                        html.theme-light #agent-modal > div {
+                            background-color: #ffffff !important;
+                            border-color: #e5e7eb !important;
+                            box-shadow: 0 8px 40px rgba(0,0,0,0.12) !important;
+                        }
+                        /* Title */
+                        html.theme-light #agent-modal h3 { color: #111827 !important; }
+                        html.theme-light #agent-modal h3 i { color: #7c3aed !important; }
+                        /* Workflow banner (purple-900/20) */
+                        html.theme-light #agent-modal .bg-purple-900\/20 {
+                            background-color: #f5f3ff !important;
+                            border-color: #ddd6fe !important;
+                        }
+                        html.theme-light #agent-modal .text-purple-300 { color: #6d28d9 !important; }
+                        /* Inner cards (bg-slate-950) */
+                        html.theme-light #agent-modal .bg-slate-950 {
+                            background-color: #f9fafb !important;
+                            border-color: #e5e7eb !important;
+                        }
+                        /* Labels */
+                        html.theme-light #agent-modal .text-slate-300 { color: #374151 !important; }
+                        html.theme-light #agent-modal .text-slate-500 { color: #6b7280 !important; }
+                        /* Textarea & select */
+                        html.theme-light #agent-modal textarea,
+                        html.theme-light #agent-modal select {
+                            background-color: #ffffff !important;
+                            border-color: #d1d5db !important;
+                            color: #111827 !important;
+                        }
+                        html.theme-light #agent-modal textarea::placeholder { color: #9ca3af !important; }
+                        /* 上傳參考檔案 label-button */
+                        html.theme-light #agent-modal label[for="agent-file-input"] {
+                            background-color: #f3f4f6 !important;
+                            border-color: #d1d5db !important;
+                            color: #374151 !important;
+                        }
+                        html.theme-light #agent-modal label[for="agent-file-input"] i { color: #6b7280 !important; }
+                        /* Divider inside card */
+                        html.theme-light #agent-modal .border-slate-800 { border-color: #e5e7eb !important; }
+                        /* Target length input */
+                        html.theme-light #agent-modal input { background-color: #ffffff !important; border-color: #d1d5db !important; color: #111827 !important; }
+                        /* X close button */
+                        html.theme-light #agent-modal button[onclick="closeAgentModal()"] {
+                            background-color: #f3f4f6 !important;
+                            color: #374151 !important;
+                        }
+                        /* 開始分析作業 button — keep it distinct but light-blue */
+                        html.theme-light #agent-modal button[onclick*="startAgent"],
+                        html.theme-light #agent-modal button[onclick*="runAgent"],
+                        html.theme-light #agent-modal button[id*="agent-start"] {
+                            background-color: #60a5fa !important;
+                            color: #ffffff !important;
+                            border-color: #3b82f6 !important;
+                        }
+                        
+                        /* ══════════════════════════════════════════════════════
+                           Fix 2: Sidebar tool nav items — uniform dark text
+                           (both active and inactive)
+                           ══════════════════════════════════════════════════════ */
+                        /* Desktop sidebar nav buttons */
+                        html.theme-light #nav-dashboard,
+                        html.theme-light #nav-schedule,
+                        html.theme-light #nav-notes,
+                        html.theme-light #nav-audio {
+                            color: #374151 !important;
+                            background-color: transparent !important;
+                        }
+                        html.theme-light #nav-dashboard.bg-slate-800,
+                        html.theme-light #nav-schedule.bg-slate-800,
+                        html.theme-light #nav-notes.bg-slate-800,
+                        html.theme-light #nav-audio.bg-slate-800 {
+                            background-color: #e9ecef !important;
+                            color: #111827 !important;
+                        }
+                        html.theme-light #nav-dashboard i,
+                        html.theme-light #nav-schedule i,
+                        html.theme-light #nav-notes i,
+                        html.theme-light #nav-audio i {
+                            color: #6b7280 !important;
+                        }
+                        html.theme-light #nav-dashboard:hover,
+                        html.theme-light #nav-schedule:hover,
+                        html.theme-light #nav-notes:hover,
+                        html.theme-light #nav-audio:hover {
+                            background-color: #f3f4f6 !important;
+                            color: #111827 !important;
+                        }
+                        /* Mobile menu nav buttons (same IDs not used; target by onclick) */
+                        html.theme-light button[onclick*="switchTab('dashboard')"],
+                        html.theme-light button[onclick*="switchTab('schedule')"],
+                        html.theme-light button[onclick*="switchTab('notes')"],
+                        html.theme-light button[onclick*="switchTab('audio')"] {
+                            color: #374151 !important;
+                        }
+                        html.theme-light button[onclick*="switchTab('dashboard')"].bg-slate-800,
+                        html.theme-light button[onclick*="switchTab('schedule')"].bg-slate-800,
+                        html.theme-light button[onclick*="switchTab('notes')"].bg-slate-800,
+                        html.theme-light button[onclick*="switchTab('audio')"].bg-slate-800 {
+                            background-color: #e9ecef !important;
+                            color: #111827 !important;
+                        }
+                        html.theme-light button[onclick*="switchTab"] i { color: #6b7280 !important; }
+                        html.theme-light button[onclick*="switchTab"]:hover { background-color: #f3f4f6 !important; }
                 `;
                 document.head.appendChild(style);
             }
