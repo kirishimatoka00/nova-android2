@@ -1814,8 +1814,11 @@
         let recognition = null; let noteRecognition = null; let voiceTimer = null; 
         let chatInitialInput = ""; let noteInitialInput = "";
         let alarmInterval = null; let alarmAudioCtx = null; let mediaRecorder = null; let audioChunks = [];
+        // ── 週期性 chunk flush（防止長時錄音 OOM crash）──
+        let _chunkFlushTimer = null;   // setInterval 計時器 id
+        let _flushedSegIds  = [];      // 本段已 flush 到 IndexedDB 的暫存 id 陣列
         let liveVideoStream = null; 
-        let vadAudioCtx = null; let vadStream = null; let vadAnalyser = null; 
+        let vadAudioCtx = null; let vadStream = null; let vadAnalyser = null; let vadInterval = null;
         let translateDiscardNext = false;
         let wakeLock = null; // 防休眠鎖
         
@@ -7098,6 +7101,7 @@ msg.files : (msg.file ? [msg.file] : []);
             stopRecordingForegroundService();
             
             if (vadTimerWorker) { vadTimerWorker.postMessage('stop'); }
+            if (vadInterval) { clearInterval(vadInterval); vadInterval = null; }
             if (vadStream) { try{vadStream.disconnect();}catch(e){} vadStream = null; }
             if (vadAnalyser) { try{vadAnalyser.disconnect();}catch(e){} vadAnalyser = null; }
             if (vadAudioCtx && vadAudioCtx.state !== 'closed') {
@@ -10747,6 +10751,52 @@ try {
             appState.splitTimerId = null;
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // 週期性 chunk flush（核心 OOM 防護）
+        // 每 FLUSH_INTERVAL_MS 將 audioChunks 寫入 IndexedDB 並清空，
+        // 避免長時錄音將大量 Blob 物件累積在 JS heap 造成 Android WebView 被系統 kill。
+        // ══════════════════════════════════════════════════════════════
+        const _FLUSH_INTERVAL_MS = 3 * 60 * 1000; // 每 3 分鐘 flush 一次
+
+        function _startChunkFlush(mimeType) {
+            _stopChunkFlush();
+            _flushedSegIds = [];
+            _chunkFlushTimer = setInterval(async () => {
+                if (audioChunks.length === 0) return;
+                if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+                const toFlush = [...audioChunks];
+                audioChunks = []; // 立即釋放 JS heap
+                const flushId = `_sf_${Date.now()}`;
+                try {
+                    const blob = new Blob(toFlush, { type: mimeType });
+                    await saveAudioBlob(flushId, blob);
+                    _flushedSegIds.push(flushId);
+                } catch(e) {
+                    // 若 IndexedDB 寫入失敗，回滾 chunks（避免資料遺失）
+                    audioChunks = [...toFlush, ...audioChunks];
+                }
+            }, _FLUSH_INTERVAL_MS);
+        }
+
+        function _stopChunkFlush() {
+            if (_chunkFlushTimer) { clearInterval(_chunkFlushTimer); _chunkFlushTimer = null; }
+        }
+
+        // 組合 flush 到 IndexedDB 的分段 blob + 剩餘 in-memory chunks，返回完整 Blob
+        async function _buildFinalBlob(remainingChunks, flushedIds, mimeType) {
+            if (!flushedIds || flushedIds.length === 0) {
+                return new Blob(remainingChunks, { type: mimeType });
+            }
+            const parts = [];
+            for (const fid of flushedIds) {
+                const b = await loadAudioBlob(fid);
+                if (b) parts.push(b);
+                try { deleteAudioBlob(fid); } catch(e) {} // 清理暫存
+            }
+            if (remainingChunks.length > 0) parts.push(new Blob(remainingChunks, { type: mimeType }));
+            return new Blob(parts, { type: mimeType });
+        }
+
         async function doAutoSplit() {
             if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
             appState.isAutoSplitting = true;
@@ -10787,6 +10837,11 @@ try {
                 const micStream = appState._meetingMicStream;
                 const sysStream = appState._meetingSysStream;
                 let mixedStream;
+                // ★ 修正 AudioContext 洩漏：先關閉上一段的 AudioContext 再建新的
+                if (appState.recordingAudioCtx && appState.recordingAudioCtx.state !== 'closed') {
+                    try { appState.recordingAudioCtx.close(); } catch(e) {}
+                    appState.recordingAudioCtx = null;
+                }
                 if (sysStream && sysStream.getAudioTracks().some(t => t.readyState === 'live')) {
                     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
                     const audioCtx = new AudioContextClass();
@@ -10810,6 +10865,7 @@ try {
                 appState.recordingStartTime = Date.now();
                 appState.isAutoSplitting = false;
                 mediaRecorder.start(1000);
+                _startChunkFlush(actualMimeType); // ★ 每 3 分鐘 flush 一次防 OOM
                 scheduleAutoSplit();
                 document.getElementById('recording-status').classList.remove('hidden');
                 document.getElementById('recording-status').classList.add('flex');
@@ -10878,6 +10934,7 @@ try {
                 appState.recGroupId = null;
                 appState.isAutoSplitting = false;
                 mediaRecorder.start(1000);
+                _startChunkFlush(actualMimeType); // ★ 每 3 分鐘 flush 一次防 OOM
                 scheduleAutoSplit();
                 
                 document.getElementById('recording-status').classList.remove('hidden'); 
@@ -10909,6 +10966,7 @@ try {
                 if (!appState.isAutoSplitting) appState.recGroupId = null;
                 appState.isAutoSplitting = false;
                 mediaRecorder.start(1000);
+                _startChunkFlush(mediaRecorder.mimeType || 'audio/webm'); // ★ 每 3 分鐘 flush 一次防 OOM
                 scheduleAutoSplit();
                 
                 document.getElementById('recording-status').classList.remove('hidden'); document.getElementById('recording-status').classList.add('flex');
@@ -10934,6 +10992,7 @@ try {
             }
 
             cancelAutoSplit();         // 取消自動分切計時器
+            _stopChunkFlush();         // ★ 停止週期 flush，最後剩餘 chunks 留在 audioChunks 等 onstop 處理
             appState.isAutoSplitting = false; // 確保不會自動重啟
             // ⚠️ 注意：不在這裡清除 recGroupId，讓最後一段也能取得正確 groupId
             // recGroupId 會在 uploadAudioRecording 完成後於 appState.recGroupId = null 被清除
@@ -10966,19 +11025,20 @@ try {
             // ── 自動分切：立即啟動下一段，不等待本段處理 ──────────────────
             if (wasAutoSplitting) {
                 // 把 chunks 快取起來，馬上重置全域 audioChunks 讓新段能用
-                const savedChunks = [...audioChunks];
-                const savedMime   = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm';
-                const savedStart  = appState.recordingStartTime;
-                const savedCtx    = continuationCtx;
-                audioChunks = [];
+                const savedChunks   = [...audioChunks];
+                const savedFlushIds = [..._flushedSegIds]; // ★ 捕獲本段的 flushed IDs
+                const savedMime     = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm';
+                const savedStart    = appState.recordingStartTime;
+                const savedCtx      = continuationCtx;
+                audioChunks     = [];
+                _flushedSegIds  = []; // ★ 重置供新段使用
+                _stopChunkFlush();    // ★ 停止舊段 flush 計時器
 
-                // ★ 先啟動下一段（無延遲）
+                // ★ 先啟動下一段（無延遲，_startChunkFlush 會在 start 函數內重新啟動）
                 appState.isAutoSplitting = true; // 保持 flag 讓 startMeetingRecording 識別
                 if (isMeetingSplit) {
                     startMeetingRecording(continuationCtx);
                 } else {
-                    // 直接恢復原本的 context（'note' 或 'record'），不呼叫 startAudioRecordOnly()
-                    // 因為 startAudioRecordOnly() 會強制把 context 改成 'record'
                     appState.recordingContext = continuationCtx;
                     appState.currentAudioTranscript = "";
                     startAudioRecording();
@@ -10986,15 +11046,17 @@ try {
 
                 // 背景處理舊段（不阻塞新段錄音）
                 (async () => {
-                    await processAndSaveAudioSegment(savedChunks, savedMime, savedStart, savedCtx, true);
+                    await processAndSaveAudioSegment(savedChunks, savedFlushIds, savedMime, savedStart, savedCtx, true);
                 })();
                 return;
             }
 
             // ── 正常停止：同步處理 ──────────────────────────────────────────
-            const chunks = [...audioChunks];
-            audioChunks = [];
-            await processAndSaveAudioSegment(chunks,
+            const chunks        = [...audioChunks];
+            const finalFlushIds = [..._flushedSegIds]; // ★ 捕獲 flushed IDs
+            audioChunks    = [];
+            _flushedSegIds = [];
+            await processAndSaveAudioSegment(chunks, finalFlushIds,
                 (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm',
                 appState.recordingStartTime, continuationCtx, false);
 
@@ -11004,9 +11066,10 @@ try {
         }
 
         // 實際的音訊儲存處理（可在背景執行）
-        async function processAndSaveAudioSegment(chunksArr, actualMimeType, startTime, ctx, isSegment) {
+        async function processAndSaveAudioSegment(chunksArr, flushedIds, actualMimeType, startTime, ctx, isSegment) {
             let recordDuration = Date.now() - (startTime || Date.now());
-            let audioBlob = new Blob(chunksArr, { type: actualMimeType });
+            // ★ 組合 flushed 分段 blob + 剩餘 in-memory chunks（核心 OOM 修正）
+            let audioBlob = await _buildFinalBlob(chunksArr, flushedIds, actualMimeType);
 
             if (actualMimeType.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
                 audioBlob = await new Promise(resolve => {
