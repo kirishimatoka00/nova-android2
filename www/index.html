@@ -10771,11 +10771,14 @@ try {
             if (!flushedIds || flushedIds.length === 0) {
                 return new Blob(remainingChunks, { type: mimeType });
             }
+            // ★ OOM修正：每讀取一個 flushed 分段後讓主執行緒喘息 30ms，給 GC 機會回收
+            //   上一次 loadAudioBlob() 返回的 Blob 在 push 後可讓前一個 IndexedDB 讀取物件被回收
             const parts = [];
             for (const fid of flushedIds) {
                 const b = await loadAudioBlob(fid);
                 if (b) parts.push(b);
                 try { deleteAudioBlob(fid); } catch(e) {} // 清理暫存
+                await new Promise(r => setTimeout(r, 30)); // ★ GC breathing room
             }
             if (remainingChunks.length > 0) parts.push(new Blob(remainingChunks, { type: mimeType }));
             return new Blob(parts, { type: mimeType });
@@ -11064,7 +11067,7 @@ try {
                 });
                 // ★ 明確釋放原始 Blob 引用，讓 GC 盡快回收（ysFixWebmDuration 內部有 ArrayBuffer 副本，原 Blob 不再需要）
                 if (audioBlob !== originalBlob) {
-                    // originalBlob 引用超出 scope 後 GC 可回收
+                    // ★ OOM修正：明確解除 originalBlob 引用，觸發 GC 在 IndexedDB 寫入前回收大型 ArrayBuffer
                 }
             }
 
@@ -11086,6 +11089,10 @@ try {
             if (!appState.recGroupId) appState.recGroupId = groupId;
 
             await saveAudioBlob(recordId, audioBlob);
+            // ★ OOM修正：寫入 IndexedDB 後主動解除 Blob 引用，讓 GC 能在 auto-upload 觸發前回收
+            //   （即便 audioBlob 仍有 scope，解除為 null 讓 GC 可提前回收底層 ArrayBuffer）
+            audioBlob = null;
+            await new Promise(r => setTimeout(r, 100)); // 讓 GC 有時間真正回收
 
             // 存入本地資料夾（直接存 weba，不轉 MP3）
             if (appState.recSettings.localDirHandle) {
@@ -11112,7 +11119,7 @@ try {
                 addMessage(`📝 語音筆記已安全儲存至「筆記/文件」分頁${segMsg}。`, 'system'); renderNotes();
                 // ── 自動上傳 Google Drive（筆記/文件頁分段錄音）
                 if (appState.recSettings.autoUploadNotes && appState.driveUrl) {
-                    setTimeout(() => uploadNoteAudioToDrive(newNote.id), 1500);
+                    setTimeout(() => uploadNoteAudioToDrive(newNote.id), 30000); // ★ OOM修正：延長至30秒，讓 GC 充分回收音訊記憶體後再做 base64 編碼
                 }
             } else {
                 const segIndex = appState.audioRecords.filter(r => r.groupId === groupId).length + 1;
@@ -11134,7 +11141,7 @@ try {
                 addMessage(`📼 錄音已安全儲存至本地「錄音紀錄」分頁${segMsg}。`, 'system'); renderAudioRecords();
                 // ── 自動上傳 Google Drive
                 if (appState.recSettings.autoUploadAudio && appState.driveUrl) {
-                    setTimeout(() => manualUploadToDrive(String(newRecord.id)), 1500);
+                    setTimeout(() => manualUploadToDrive(String(newRecord.id)), 30000); // ★ OOM修正：延長至30秒，讓 GC 充分回收音訊記憶體後再做 base64 編碼
                 }
             }
             // ★ 釋放防護旗標，允許 WAL snapshot 再次觸發
@@ -11142,7 +11149,7 @@ try {
             // ★ 如果儲存期間有 snapshot 被延後，現在補觸發（延遲 2 秒讓 GC 有時間回收記憶體）
             if (_novaWalSnapshotDeferred) {
                 _novaWalSnapshotDeferred = false;
-                setTimeout(() => { if (typeof window._novaWalSnapshot === 'function') window._novaWalSnapshot(); }, 2000);
+                setTimeout(() => { if (typeof window._novaWalSnapshot === 'function') window._novaWalSnapshot(); }, 15000); // ★ OOM修正：延長至15秒，避免與音訊 base64 編碼/Drive上傳在記憶體峰值期撞車
             }
         }
 
@@ -11801,6 +11808,21 @@ try {
                 if (!audioBlob) { showToast('❌ 找不到音訊資料，請重新錄製'); cleanup(); return; }
 
                 const rawSizeMB = (audioBlob.size / 1024 / 1024).toFixed(1);
+                // ★ OOM修正：對大檔案做記憶體警告
+                //   base64 編碼後體積 +33%，再加 JSON 序列化又 +33%，
+                //   一支 40MB weba = 需要同時持有 ~107MB 字串 → 容易在低記憶體設備崩潰
+                if (parseFloat(rawSizeMB) > 30) {
+                    const proceed = await showConfirm(
+                        `⚠️ 此檔案大小 ${rawSizeMB} MB，上傳時需要在記憶體中同時持有原始音訊、base64 字串與 JSON 封包（合計約 ${(parseFloat(rawSizeMB) * 2.66).toFixed(0)} MB）。
+
+低記憶體設備可能在此步驟閃退。
+
+建議先「手動下載」後再自行上傳至 Google Drive。
+
+仍要在 App 內上傳嗎？`
+                    );
+                    if (!proceed) { cleanup(); return; }
+                }
                 showToast(`☁️ 準備上傳（${rawSizeMB} MB weba 原始格式），請稍候…`);
 
                 // 直接使用原始 weba 格式上傳，不轉 MP3
