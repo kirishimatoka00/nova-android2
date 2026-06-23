@@ -2736,6 +2736,10 @@ async function encodeMp3(audioBuffer) {
         let _novaWalLastSnapshot = 0;
         let _novaWalBusy = false;
         let _novaWalDir = null; // 記住目前可用的目錄，避免每次都試錯
+        // ★ 錄音儲存防護：processAndSaveAudioSegment 進行中時暫停 WAL snapshot
+        //   避免兩個重型操作並發造成 OOM
+        let _novaRecordingSaving = false;    // true = 正在處理音訊儲存
+        let _novaWalSnapshotDeferred = false; // true = 有 snapshot 被延後等待觸發
 
         function _novaWalGetCapFS() {
             return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
@@ -2806,10 +2810,15 @@ async function encodeMp3(audioBuffer) {
                 const b64 = btoa(unescape(encodeURIComponent(line)));
                 await _novaWalWriteFile(_NOVA_WAL_DELTA, b64, true);
                 _novaWalDeltaCount++;
-                // 累積到一定量或超過時間，觸發完整快照
+                // ★ 提高閾值：50 個 delta 或 5 分鐘才觸發快照（原為 20 / 3 分鐘）
                 const now = Date.now();
-                if (_novaWalDeltaCount >= 20 || (now - _novaWalLastSnapshot > 3 * 60 * 1000 && _novaWalDeltaCount > 0)) {
-                    window._novaWalSnapshot();
+                if (_novaWalDeltaCount >= 50 || (now - _novaWalLastSnapshot > 5 * 60 * 1000 && _novaWalDeltaCount > 0)) {
+                    // ★ 錄音儲存期間不觸發 snapshot（防止 OOM：音訊處理 + 備份序列化並發）
+                    if (_novaRecordingSaving) {
+                        _novaWalSnapshotDeferred = true; // 標記延後，等儲存完成後再補觸發
+                    } else {
+                        window._novaWalSnapshot();
+                    }
                 }
             } catch(e) { /* 靜默失敗，不影響主流程 */ }
         };
@@ -11067,15 +11076,25 @@ try {
 
         // 實際的音訊儲存處理（可在背景執行）
         async function processAndSaveAudioSegment(chunksArr, flushedIds, actualMimeType, startTime, ctx, isSegment) {
+            // ★ 設定防護旗標：告知 WAL 系統「音訊儲存中，請勿觸發 snapshot」
+            _novaRecordingSaving = true;
             let recordDuration = Date.now() - (startTime || Date.now());
             // ★ 組合 flushed 分段 blob + 剩餘 in-memory chunks（核心 OOM 修正）
             let audioBlob = await _buildFinalBlob(chunksArr, flushedIds, actualMimeType);
 
             if (actualMimeType.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
+                const originalBlob = audioBlob;
                 audioBlob = await new Promise(resolve => {
-                    try { ysFixWebmDuration(audioBlob, recordDuration, resolve); } catch(e) { resolve(audioBlob); }
+                    try { ysFixWebmDuration(originalBlob, recordDuration, resolve); } catch(e) { resolve(originalBlob); }
                 });
+                // ★ 明確釋放原始 Blob 引用，讓 GC 盡快回收（ysFixWebmDuration 內部有 ArrayBuffer 副本，原 Blob 不再需要）
+                if (audioBlob !== originalBlob) {
+                    // originalBlob 引用超出 scope 後 GC 可回收
+                }
             }
+
+            // ★ 強制讓主執行緒喘息一下，GC 有機會在 IndexedDB 寫入前回收記憶體
+            await new Promise(r => setTimeout(r, 50));
 
             const dateObj = new Date();
             const month   = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -11142,6 +11161,13 @@ try {
                 if (appState.recSettings.autoUploadAudio && appState.driveUrl) {
                     setTimeout(() => manualUploadToDrive(String(newRecord.id)), 1500);
                 }
+            }
+            // ★ 釋放防護旗標，允許 WAL snapshot 再次觸發
+            _novaRecordingSaving = false;
+            // ★ 如果儲存期間有 snapshot 被延後，現在補觸發（延遲 2 秒讓 GC 有時間回收記憶體）
+            if (_novaWalSnapshotDeferred) {
+                _novaWalSnapshotDeferred = false;
+                setTimeout(() => { if (typeof window._novaWalSnapshot === 'function') window._novaWalSnapshot(); }, 2000);
             }
         }
 
