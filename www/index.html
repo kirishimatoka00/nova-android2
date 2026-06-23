@@ -751,9 +751,7 @@
             <!-- 手機版頂部導航列 -->
             <div class="md:hidden flex items-center justify-between p-3 bg-transparent z-30 shrink-0">
                 <div class="flex items-center shrink-0">
-                    <div class="w-8 h-8 bg-gradient-to-tr from-cyan-500 to-blue-500 rounded-xl flex items-center justify-center shadow-md">
-                        <i class="ph-bold ph-infinity text-white" style="font-size:1.1rem;"></i>
-                    </div>
+                    <i class="ph-bold ph-infinity" style="font-size:1.75rem;color:#06b6d4;"></i>
                 </div>
                 <div class="flex items-center space-x-3 ml-auto pl-2">
                     <div class="flex items-center space-x-1 bg-slate-800/50 px-2 py-1 rounded-lg border border-slate-700/50 cursor-pointer active:scale-95 transition-transform" onclick="cycleManualLocation()">
@@ -5221,6 +5219,34 @@ return html;
                         
                         /* ── 4. Folder-move button icon stays gray ── */
                         html.theme-light [onclick*="openMoveFolderModal"] i { color: #9ca3af !important; }
+                        
+                        /* ── Fix 1: Chat top-left icon — no box in dark mode either (already bare HTML now) ── */
+                        .md\:hidden i.ph-infinity { font-size: 1.75rem; color: #06b6d4; }
+                        
+                        /* ── Fix 2: Unified row highlight — override inline bg for light mode ── */
+                        html.theme-light .nova-chat-item {
+                            background-color: transparent !important;
+                        }
+                        html.theme-light .nova-chat-item:hover {
+                            background-color: #f0f0f0 !important;
+                        }
+                        html.theme-light .nova-chat-item-active {
+                            background-color: #e5e7eb !important;
+                        }
+                        /* All children inherit transparent so row bg shows uniformly */
+                        html.theme-light .nova-chat-item > div,
+                        html.theme-light .nova-chat-item > div button,
+                        html.theme-light .nova-chat-item-active > div,
+                        html.theme-light .nova-chat-item-active > div button {
+                            background-color: transparent !important;
+                        }
+                        /* Text colors in light mode */
+                        html.theme-light .nova-chat-item span { color: #374151 !important; font-weight: 400 !important; }
+                        html.theme-light .nova-chat-item-active span { color: #111827 !important; font-weight: 600 !important; }
+                        html.theme-light .nova-chat-item i,
+                        html.theme-light .nova-chat-item button { color: #9ca3af !important; }
+                        html.theme-light .nova-chat-item-active i,
+                        html.theme-light .nova-chat-item-active button { color: #6b7280 !important; }
                 `;
                 document.head.appendChild(style);
             }
@@ -9096,15 +9122,15 @@ msg.text === "請詳細描述畫面中的內容。" || msg.text === `[夾帶檔�
             const pinIcon = isPinned ? 'ph-fill ph-push-pin text-yellow-400' : 'ph-bold ph-push-pin';
             // 手機版：常駐顯示「移至資料夾」+「刪除」；其餘按鈕收在一起
             // 點對話名稱載入，點按鈕不載入
-            return `<div class="flex items-center rounded-xl mb-0.5 overflow-hidden ${isActive ? 'nova-chat-item-active' : 'nova-chat-item'}">
-                <div class="flex items-center gap-2 min-w-0 p-2.5 cursor-pointer" style="flex:1;overflow:hidden;" onclick="loadChatSession('${sid}')">
-                    <i class="ph-bold ph-chat-circle ${isActive ? 'text-slate-600' : 'text-slate-400'} text-base" style="flex-shrink:0;"></i>
-                    <span style="font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isActive ? '600' : '400'};" class="${isActive ? 'text-slate-900' : 'text-slate-700'}">${escapeHtml(title)}</span>
+            return `<div class="flex items-center rounded-xl mb-0.5 overflow-hidden ${isActive ? 'nova-chat-item-active' : 'nova-chat-item'}" style="background:${isActive ? 'rgba(71,85,105,0.35)' : 'transparent'};">
+                <div class="flex items-center gap-2 min-w-0 p-2.5 cursor-pointer" style="flex:1;overflow:hidden;background:transparent;" onclick="loadChatSession('${sid}')">
+                    <i class="ph-bold ph-chat-circle text-base" style="flex-shrink:0;color:${isActive ? '#475569' : '#94a3b8'};"></i>
+                    <span style="font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${isActive ? '600' : '400'};color:${isActive ? '#e2e8f0' : '#94a3b8'};">${escapeHtml(title)}</span>
                 </div>
-                <div style="display:flex;align-items:center;flex-shrink:0;width:108px;">
-                    <button onclick="renameChatSession('${sid}', event)" style="padding:8px;color:#94a3b8;flex:1;" title="重新命名"><i class="ph-bold ph-pencil-simple" style="font-size:1.1rem;"></i></button>
-                    <button onclick="openMoveFolderModal('${sid}', event)" style="padding:8px;color:#9ca3af;flex:1;" title="移至資料夾"><i class="ph-fill ph-folder-open" style="font-size:1.1rem;"></i></button>
-                    <button onclick="deleteChatSession('${sid}', event)" style="padding:8px;color:#94a3b8;flex:1;" title="刪除"><i class="ph-bold ph-trash" style="font-size:1.1rem;"></i></button>
+                <div style="display:flex;align-items:center;flex-shrink:0;width:108px;background:transparent;">
+                    <button onclick="renameChatSession('${sid}', event)" style="padding:8px;color:${isActive ? '#64748b' : '#64748b'};flex:1;background:transparent;" title="重新命名"><i class="ph-bold ph-pencil-simple" style="font-size:1.1rem;"></i></button>
+                    <button onclick="openMoveFolderModal('${sid}', event)" style="padding:8px;color:${isActive ? '#64748b' : '#64748b'};flex:1;background:transparent;" title="移至資料夾"><i class="ph-fill ph-folder-open" style="font-size:1.1rem;"></i></button>
+                    <button onclick="deleteChatSession('${sid}', event)" style="padding:8px;color:${isActive ? '#64748b' : '#64748b'};flex:1;background:transparent;" title="刪除"><i class="ph-bold ph-trash" style="font-size:1.1rem;"></i></button>
                 </div>
             </div>`;
         }
