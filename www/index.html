@@ -1814,125 +1814,8 @@
         let recognition = null; let noteRecognition = null; let voiceTimer = null; 
         let chatInitialInput = ""; let noteInitialInput = "";
         let alarmInterval = null; let alarmAudioCtx = null; let mediaRecorder = null; let audioChunks = [];
-        // ── 週期性 chunk flush（防止長時錄音 OOM crash）──
-        let _chunkFlushTimer = null;   // setInterval 計時器 id
-        let _flushedSegIds  = [];      // 本段已 flush 到 IndexedDB 的暫存 id 陣列
-
-        // ══════════════════════════════════════════════════════════════
-        // OPFS 串流錄音狀態（Origin Private File System）
-        //   在支援的環境（Chrome 86+ / Android WebView 86+）中，
-        //   ondataavailable 的每個小 chunk 直接寫入 OPFS 磁碟，
-        //   完全不進 JS heap — 無論錄幾小時記憶體都不會成長。
-        //   停止後透過 3MB 分塊 appendFile 寫到 Documents，peak 記憶體 < 10MB。
-        //   舊設備不支援 OPFS 時自動退回 IndexedDB flush 方案。
-        // ══════════════════════════════════════════════════════════════
-        let _opfsRoot        = null;   // OPFS 根目錄 handle
-        let _opfsFileHandle  = null;   // 目前段的暫存檔案 handle
-        let _opfsWritable    = null;   // FileSystemWritableFileStream
-        let _opfsFilename    = null;   // 暫存檔名（含時間戳）
-        let _opfsAvailable   = null;   // null=未測試，true/false=已測試
-
-        async function _checkOpfsAvailable() {
-            if (_opfsAvailable !== null) return _opfsAvailable;
-            try {
-                const root = await navigator.storage.getDirectory();
-                const testHandle = await root.getFileHandle('_nova_opfs_test', { create: true });
-                const ws = await testHandle.createWritable();
-                await ws.write(new Blob(['test']));
-                await ws.close();
-                await root.removeEntry('_nova_opfs_test');
-                _opfsRoot = root;
-                _opfsAvailable = true;
-            } catch(e) {
-                console.warn('[NOVA OPFS] 不支援，退回 IndexedDB flush 模式:', e.message);
-                _opfsAvailable = false;
-            }
-            return _opfsAvailable;
-        }
-
-        async function _initOpfsStream(segmentId) {
-            if (!await _checkOpfsAvailable()) return false;
-            try {
-                _opfsFilename   = `nova_rec_${segmentId}.weba`;
-                _opfsFileHandle = await _opfsRoot.getFileHandle(_opfsFilename, { create: true });
-                _opfsWritable   = await _opfsFileHandle.createWritable();
-                console.log('[NOVA OPFS] 串流已開啟:', _opfsFilename);
-                return true;
-            } catch(e) {
-                console.warn('[NOVA OPFS] 開啟失敗，退回 IndexedDB:', e.message);
-                _opfsAvailable = false;
-                return false;
-            }
-        }
-
-        async function _closeOpfsStream() {
-            if (!_opfsWritable) return;
-            try { await _opfsWritable.close(); } catch(e) {}
-            _opfsWritable = null;
-        }
-
-        async function _cleanupOpfs() {
-            _opfsWritable   = null;
-            const fname     = _opfsFilename;
-            _opfsFilename   = null;
-            _opfsFileHandle = null;
-            if (_opfsRoot && fname) {
-                try { await _opfsRoot.removeEntry(fname); } catch(e) {}
-            }
-        }
-
-        // 從 OPFS 分塊串流寫入 Documents（peak 記憶體 < 10MB）
-        async function _streamOpfsToDocuments(opfsHandle, destFilename) {
-            if (!opfsHandle) return false;
-            const CapFS = window.Capacitor?.Plugins?.Filesystem;
-            if (!CapFS) return false;
-            try {
-                const file  = await opfsHandle.getFile();
-                const CHUNK = 3 * 1024 * 1024; // 3MB（base64 對齊：3N bytes → 4N/3 chars，無殘留）
-                let offset  = 0;
-                let isFirst = true;
-                while (offset < file.size) {
-                    const slice = file.slice(offset, offset + CHUNK);
-                    const ab    = await slice.arrayBuffer();
-                    const bytes = new Uint8Array(ab);
-                    let binary  = '';
-                    const BATCH = 32768;
-                    for (let i = 0; i < bytes.length; i += BATCH) {
-                        binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + BATCH, bytes.length)));
-                    }
-                    const b64 = btoa(binary);
-                    if (isFirst) {
-                        await CapFS.writeFile({ path: `NOVA_Recordings/${destFilename}`, data: b64, directory: 'DOCUMENTS', recursive: true });
-                        isFirst = false;
-                    } else {
-                        await CapFS.appendFile({ path: `NOVA_Recordings/${destFilename}`, data: b64, directory: 'DOCUMENTS' });
-                    }
-                    offset += CHUNK;
-                    await new Promise(r => setTimeout(r, 30)); // GC breathing room
-                }
-                console.log(`[NOVA OPFS] 串流寫入完成: Documents/NOVA_Recordings/${destFilename}`);
-                return true;
-            } catch(e) {
-                console.warn('[NOVA OPFS] _streamOpfsToDocuments 失敗:', e);
-                return false;
-            }
-        }
-
-        // 從 OPFS 讀取並存入 IndexedDB（以 File/Blob 直接存，不做 ArrayBuffer 轉換）
-        async function _saveOpfsToIndexedDB(opfsHandle, recordId) {
-            if (!opfsHandle) return null;
-            try {
-                const file = await opfsHandle.getFile();
-                // File 繼承自 Blob，可直接存入 IndexedDB，不需 base64 或 ArrayBuffer 轉換
-                await saveAudioBlob(recordId, file);
-                return file;
-            } catch(e) {
-                console.warn('[NOVA OPFS] _saveOpfsToIndexedDB 失敗:', e);
-                return null;
-            }
-        }
         let liveVideoStream = null; 
-        let vadAudioCtx = null; let vadStream = null; let vadAnalyser = null; let vadInterval = null;
+        let vadAudioCtx = null; let vadStream = null; let vadAnalyser = null; 
         let translateDiscardNext = false;
         let wakeLock = null; // 防休眠鎖
         
@@ -2850,10 +2733,6 @@ async function encodeMp3(audioBuffer) {
         let _novaWalLastSnapshot = 0;
         let _novaWalBusy = false;
         let _novaWalDir = null; // 記住目前可用的目錄，避免每次都試錯
-        // ★ 錄音儲存防護：processAndSaveAudioSegment 進行中時暫停 WAL snapshot
-        //   避免兩個重型操作並發造成 OOM
-        let _novaRecordingSaving = false;    // true = 正在處理音訊儲存
-        let _novaWalSnapshotDeferred = false; // true = 有 snapshot 被延後等待觸發
 
         function _novaWalGetCapFS() {
             return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
@@ -2924,15 +2803,10 @@ async function encodeMp3(audioBuffer) {
                 const b64 = btoa(unescape(encodeURIComponent(line)));
                 await _novaWalWriteFile(_NOVA_WAL_DELTA, b64, true);
                 _novaWalDeltaCount++;
-                // ★ 提高閾值：50 個 delta 或 5 分鐘才觸發快照（原為 20 / 3 分鐘）
+                // 累積到一定量或超過時間，觸發完整快照
                 const now = Date.now();
-                if (_novaWalDeltaCount >= 50 || (now - _novaWalLastSnapshot > 5 * 60 * 1000 && _novaWalDeltaCount > 0)) {
-                    // ★ 錄音儲存期間不觸發 snapshot（防止 OOM：音訊處理 + 備份序列化並發）
-                    if (_novaRecordingSaving) {
-                        _novaWalSnapshotDeferred = true; // 標記延後，等儲存完成後再補觸發
-                    } else {
-                        window._novaWalSnapshot();
-                    }
+                if (_novaWalDeltaCount >= 20 || (now - _novaWalLastSnapshot > 3 * 60 * 1000 && _novaWalDeltaCount > 0)) {
+                    window._novaWalSnapshot();
                 }
             } catch(e) { /* 靜默失敗，不影響主流程 */ }
         };
@@ -2985,49 +2859,51 @@ async function encodeMp3(audioBuffer) {
                     },
                     noteFolders: appState.noteFolders,
                     currentSessionId: appState.currentSessionId,
-                    // ★ messages：去除 image/imageData 欄位（base64 圖片不寫入 Live 備份，避免膨脹）
-                    messages: (appState.messages || []).map(m => {
-                        const { image, imageData, ...rest } = m; return rest;
-                    }),
-                    // ★ notes：去除 images 陣列（可能含 base64），保留所有文字欄位
-                    notes: (appState.notes || []).map(n => {
-                        const { images, image, ...rest } = n;
-                        return { ...rest, images: [], image: null };
-                    }),
+                    messages: appState.messages || [],
+                    notes: appState.notes || [],
                     todos: appState.todos || [],
-                    // ★ audioRecords：只存 metadata，不含音訊 blob
                     audioRecords: (appState.audioRecords || []).map(r => { const {audioData, ...rest} = r; return rest; }),
                 };
 
-                // ★ 直接以串流方式寫入目標目錄（DOCUMENTS/NOVA_Backups/NOVA_Live.json）
-                //   不再走 CACHE → copy 兩步驟（copy 失敗會被靜默吞掉導致檔案永遠不更新）
-                const dirsToTry = _novaWalDir
-                    ? [_novaWalDir, _NOVA_WAL_DIR_PRIMARY, _NOVA_WAL_DIR_FALLBACK]
-                    : [_NOVA_WAL_DIR_PRIMARY, _NOVA_WAL_DIR_FALLBACK];
-                let _written = false;
-                for (const dir of [...new Set(dirsToTry)]) {
-                    try {
-                        // 確保 NOVA_Backups 目錄存在
-                        try { await CapFS.mkdir({ path: 'NOVA_Backups', directory: dir, recursive: true }); } catch(e) {}
-                        await window._novaStreamBackup(CapFS, `NOVA_Backups/${_NOVA_WAL_SNAPSHOT}`, fullBackupData, dir);
-                        _novaWalDir = dir;
-                        _written = true;
-                        break;
-                    } catch(e) {
-                        console.warn('[WAL Snapshot] 寫入', dir, '失敗:', e.message || e);
+                // 用既有的串流備份函式（避免 OOM）
+                if (typeof window._novaStreamBackup === 'function') {
+                    // _novaStreamBackup 寫到 CACHE，再用原生 copy 搬到 WAL 路徑
+                    // ★ 絕不用 readFile+writeFile（會把整個檔案讀進 JS 記憶體導致 OOM 閃退）
+                    await window._novaStreamBackup(CapFS, _NOVA_WAL_SNAPSHOT, fullBackupData);
+                    const dirsToTry = _novaWalDir ? [_novaWalDir, _NOVA_WAL_DIR_PRIMARY, _NOVA_WAL_DIR_FALLBACK] : [_NOVA_WAL_DIR_PRIMARY, _NOVA_WAL_DIR_FALLBACK];
+                    let _snapMoved = false;
+                    for (const dir of [...new Set(dirsToTry)]) {
+                        try {
+                            // 先刪除舊快照（copy 若目的地已存在會失敗）
+                            try { await CapFS.deleteFile({ path: `NOVA_Backups/${_NOVA_WAL_SNAPSHOT}`, directory: dir }); } catch(e) {}
+                            await CapFS.copy({
+                                from: _NOVA_WAL_SNAPSHOT,
+                                to: `NOVA_Backups/${_NOVA_WAL_SNAPSHOT}`,
+                                directory: 'CACHE',
+                                toDirectory: dir
+                            });
+                            _novaWalDir = dir;
+                            _snapMoved = true;
+                            break;
+                        } catch(e) { continue; }
                     }
+                    try { await CapFS.deleteFile({ path: _NOVA_WAL_SNAPSHOT, directory: 'CACHE' }); } catch(e) {}
                 }
-                if (!_written) throw new Error('所有目錄寫入皆失敗');
 
-                // 清空 delta
+                // 清空 delta（快照已包含所有資料）
+                // ★ 先用 stat 確認檔案存在才刪除，避免對不存在的檔案呼叫
+                //   deleteFile 產生「An unknown error occurred」的無意義錯誤日誌
                 try {
-                    const deltaDirs = _novaWalDir ? [_novaWalDir] : [_NOVA_WAL_DIR_PRIMARY, _NOVA_WAL_DIR_FALLBACK];
-                    for (const dir of deltaDirs) {
+                    const dirsToTry = _novaWalDir ? [_novaWalDir] : [_NOVA_WAL_DIR_PRIMARY, _NOVA_WAL_DIR_FALLBACK];
+                    for (const dir of dirsToTry) {
                         try {
                             await CapFS.stat({ path: `NOVA_Backups/${_NOVA_WAL_DELTA}`, directory: dir });
+                            // 存在才刪除
                             await CapFS.deleteFile({ path: `NOVA_Backups/${_NOVA_WAL_DELTA}`, directory: dir });
                             break;
-                        } catch(e) {}
+                        } catch(e) {
+                            // stat 失敗 = 檔案不存在，無需刪除，正常情況
+                        }
                     }
                 } catch(e) {}
 
@@ -5834,78 +5710,101 @@ s('key-aws-sk', 'aws_sk'); s('key-aws-region', 'aws_region'); s('key-gmaps', 'gm
 
         // ★ 串流備份輔助：逐塊 append 到 CACHE 檔案
         // Capacitor Filesystem.appendFile 每次只處理一小塊，記憶體中不需要完整字串
-        window._novaStreamBackup = async function(CapFS, fileName, fullBackupData, targetDir = 'CACHE') {
+        window._novaStreamBackup = async function(CapFS, fileName, fullBackupData) {
             const _prog = (msg) => { if(typeof showToast==='function') showToast(msg, 6000); };
 
-            // ★ FLUSH_SIZE 縮小至 64KB（原 256KB）
-            //   btoa(encodeURIComponent(64KB)) 是同步作業，縮小 → 縮短每次卡頓時間
-            const FLUSH_SIZE = 64 * 1024;
+            // ★ 寫入緩衝區：累積到一定大小才 appendFile，
+            //   減少 IPC 呼叫次數（每次呼叫都是原生橋接，過於頻繁會很慢）
+            //   緩衝區上限約 256KB（base64 後約 340KB），遠低於會 OOM 的門檻
+            const FLUSH_SIZE = 256 * 1024;
             let _buffer = '';
             const _appendBuffer = async (forceFlush) => {
                 if (!forceFlush && _buffer.length < FLUSH_SIZE) return;
                 if (_buffer.length === 0) return;
                 const b64 = btoa(unescape(encodeURIComponent(_buffer)));
-                _buffer = ''; // ★ 先清空，讓 GC 在 await 期間可以回收
                 try {
-                    await CapFS.appendFile({ path: fileName, data: b64, directory: targetDir, encoding: 'base64' });
+                    await CapFS.appendFile({
+                        path: fileName,
+                        data: b64,
+                        directory: 'CACHE',
+                        encoding: 'base64'
+                    });
                 } catch(e) {
+                    // 首次寫入時檔案不存在，appendFile 可能失敗 → fallback writeFile 建立檔案
                     if (/open fail|ENOENT|does not exist|no such file/i.test(e.message || '')) {
-                        await CapFS.writeFile({ path: fileName, data: b64, directory: targetDir, recursive: true, encoding: 'base64' });
-                    } else { throw e; }
+                        await CapFS.writeFile({
+                            path: fileName,
+                            data: b64,
+                            directory: 'CACHE',
+                            recursive: true,
+                            encoding: 'base64'
+                        });
+                    } else {
+                        throw e;
+                    }
                 }
-                // ★ 每次磁碟寫入後 yield，讓 UI 事件循環能處理觸控/渲染
-                await new Promise(r => setTimeout(r, 0));
+                _buffer = ''; // 釋放
             };
-            const _appendText = async (text) => { _buffer += text; await _appendBuffer(false); };
+            const _appendText = async (text) => {
+                _buffer += text;
+                await _appendBuffer(false);
+            };
 
             // 先刪除舊檔（appendFile 會累加，需確保乾淨開始）
-            try { await CapFS.deleteFile({ path: fileName, directory: targetDir }); } catch(e) {}
+            try { await CapFS.deleteFile({ path: fileName, directory: 'CACHE' }); } catch(e) {}
 
             try {
-                // ── 1. header ────────────────────────────────────
+                // ── 1. 寫入 header ──────────────────────────────
                 _prog('⏳ 寫入備份 header...');
                 await new Promise(r => setTimeout(r, 20));
+
                 const headerObj = Object.assign({}, fullBackupData);
-                delete headerObj.messages; delete headerObj.notes;
-                delete headerObj.todos; delete headerObj.audioRecords;
+                delete headerObj.messages;
+                delete headerObj.notes;
+                delete headerObj.todos;
+                delete headerObj.audioRecords;
+
                 let headerStr = JSON.stringify(headerObj);
-                headerStr = headerStr.slice(0, -1) + ',"messages":[';
+                headerStr = headerStr.slice(0, -1); // 去掉結尾 }
+                headerStr += ',"messages":[';
                 await _appendText(headerStr);
 
-                // ── 2. messages（每 10 筆 yield 一次）────────────
+                // ── 2. 逐條寫入 messages（緩衝區滿才真正寫入）──
                 const msgs = fullBackupData.messages || [];
                 _prog(`⏳ 備份訊息 0/${msgs.length}...`);
                 for (let i = 0; i < msgs.length; i++) {
-                    await _appendText((i === 0 ? '' : ',') + JSON.stringify(msgs[i]));
-                    if (i % 10 === 0 && i > 0) {
+                    const chunk = (i === 0 ? '' : ',') + JSON.stringify(msgs[i]);
+                    await _appendText(chunk);
+                    if (i % 30 === 0 && i > 0) {
                         _prog(`⏳ 備份訊息 ${i}/${msgs.length}...`);
-                        await new Promise(r => setTimeout(r, 0)); // ★ yield
+                        await new Promise(r => setTimeout(r, 5));
                     }
                 }
                 await _appendText('],"notes":[');
 
-                // ── 3. notes（每 10 筆 yield）────────────────────
+                // ── 3. 逐條寫入 notes ───────────────────────────
                 const notes = fullBackupData.notes || [];
                 for (let i = 0; i < notes.length; i++) {
-                    await _appendText((i === 0 ? '' : ',') + JSON.stringify(notes[i]));
-                    if (i % 10 === 0 && i > 0) await new Promise(r => setTimeout(r, 0));
+                    const chunk = (i === 0 ? '' : ',') + JSON.stringify(notes[i]);
+                    await _appendText(chunk);
+                    if (i % 30 === 0 && i > 0) await new Promise(r => setTimeout(r, 5));
                 }
                 await _appendText('],"todos":');
                 await _appendText(JSON.stringify(fullBackupData.todos || []));
-                await new Promise(r => setTimeout(r, 0));
                 await _appendText(',"audioRecords":');
                 await _appendText(JSON.stringify(fullBackupData.audioRecords || []));
                 await _appendText('}');
-                await _appendBuffer(true); // 強制 flush 殘留
 
-                if (targetDir === 'CACHE') {
-                    const stat = await CapFS.getUri({ path: fileName, directory: 'CACHE' });
-                    return { uri: stat.uri };
-                }
-                return { ok: true };
+                // ── 4. 強制 flush 殘留緩衝區 ────────────────────
+                await _appendBuffer(true);
+
+                // ── 5. 取得檔案 URI ──────────────────────────────
+                const statResult = await CapFS.getUri({ path: fileName, directory: 'CACHE' });
+                return { uri: statResult.uri };
 
             } catch(err) {
-                try { await CapFS.deleteFile({ path: fileName, directory: targetDir }); } catch(e) {}
+                // 寫入中途失敗：刪除半成品檔案，避免留下無效 JSON
+                try { await CapFS.deleteFile({ path: fileName, directory: 'CACHE' }); } catch(e) {}
                 throw err;
             }
         };
@@ -7199,7 +7098,6 @@ msg.files : (msg.file ? [msg.file] : []);
             stopRecordingForegroundService();
             
             if (vadTimerWorker) { vadTimerWorker.postMessage('stop'); }
-            if (vadInterval) { clearInterval(vadInterval); vadInterval = null; }
             if (vadStream) { try{vadStream.disconnect();}catch(e){} vadStream = null; }
             if (vadAnalyser) { try{vadAnalyser.disconnect();}catch(e){} vadAnalyser = null; }
             if (vadAudioCtx && vadAudioCtx.state !== 'closed') {
@@ -8830,10 +8728,6 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
             window.batchDownloadWeba = async function(groupIds, type) {
                 const ids = Array.isArray(groupIds) ? groupIds : [groupIds];
                 const totalSegs = ids.length;
-                const CapFS = window.Capacitor?.Plugins?.Filesystem;
-                const CapShare = window.Capacitor?.Plugins?.Share;
-                const isAndroid = !!(window.Capacitor && window.Capacitor.getPlatform() === 'android');
-
                 for (let i = 0; i < ids.length; i++) {
                     const id = ids[i];
                     const record = type === 'record'
@@ -8856,50 +8750,18 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         } catch(e) { showToast(`⚠️ 壓縮失敗，以原格式下載`); }
                     }
 
+                    showToast(`⬇️ 下載第 ${i+1}/${totalSegs} 段 weba…`);
                     const ext = '.weba';
+                    // Bug2 fix: 加上段落編號
                     const baseTitle = (record.title || `NOVA_Audio_${id}`).replace(/[\\/:*?"<>|]/g, '_');
                     const segSuffix = totalSegs > 1 ? `_第${i+1}段` : '';
-                    const filename = baseTitle + segSuffix + ext;
-
-                    showToast(`⬇️ 儲存第 ${i+1}/${totalSegs} 段：${filename}…`);
-
-                    if (isAndroid && CapFS) {
-                        // ★ Android：用 Capacitor Filesystem 寫入 CACHE，再透過 Share 讓使用者選目的地
-                        //   不使用 <a download>（Capacitor WebView 對大 Blob URL 的下載行為不可靠）
-                        //   不使用 Directory.Documents（Android 11+ 的 DOCUMENTS 常數對應 App 私有目錄）
-                        try {
-                            // FileReader 串流式 base64 編碼（比 btoa+ArrayBuffer 更省記憶體）
-                            const b64weba = await new Promise((resolve, reject) => {
-                                const reader = new FileReader();
-                                reader.onload = () => resolve(reader.result.split(',')[1]);
-                                reader.onerror = reject;
-                                reader.readAsDataURL(audioBlob);
-                            });
-                            // 直接寫入 DOCUMENTS/NOVA_Recordings/（v52 驗證可行，檔案管理員可見）
-                            await CapFS.writeFile({
-                                path: `NOVA_Recordings/${filename}`,
-                                data: b64weba,
-                                directory: 'DOCUMENTS',
-                                recursive: true
-                            });
-                            showToast(`✅ 第 ${i+1}/${totalSegs} 段已存入 Documents/NOVA_Recordings/${filename}`);
-                        } catch(webaErr) {
-                            showToast(`❌ 第 ${i+1} 段儲存失敗：${webaErr.message}`);
-                        }
-                    } else {
-                        // 瀏覽器模式：使用 <a download>
-                        const url = URL.createObjectURL(audioBlob);
-                        const a = document.createElement('a'); a.href = url; a.download = filename; a.style.display = 'none';
-                        document.body.appendChild(a); a.click();
-                        await new Promise(r => setTimeout(r, 700));
-                        document.body.removeChild(a); URL.revokeObjectURL(url);
-                    }
-
-                    // 讓 GC 在段與段之間清理 audioBlob
-                    audioBlob = null;
-                    await new Promise(r => setTimeout(r, 300));
+                    const url = URL.createObjectURL(audioBlob);
+                    const a = document.createElement('a'); a.href = url; a.download = baseTitle + segSuffix + ext; a.style.display = 'none';
+                    document.body.appendChild(a); a.click();
+                    await new Promise(r => setTimeout(r, 700));
+                    document.body.removeChild(a); URL.revokeObjectURL(url);
                 }
-                showToast(`✅ 全部 ${totalSegs} 段處理完成！`);
+                showToast(`✅ 全部 ${totalSegs} 段 weba 下載完成！`);
             };
 
             // ── 批次下載（多段群組）MP3 ─────────────────────────────────
@@ -10562,8 +10424,12 @@ document.getElementById('translate-settings').classList.add('hidden');
             audioChunks = []; 
             let audioBlob = new Blob(chunksToProcess, { type: mediaRecorder?.mimeType || 'audio/webm' });
 
-            // ★ OOM修正：跳過 ysFixWebmDuration（見 processAndSaveAudioSegment 同樣的說明）
-            // ysFixWebmDuration 需要把整個 Blob 讀成 ArrayBuffer，大型錄音會導致記憶體倍增崩潰。
+            // 修復 WebM duration
+            if (audioBlob.type.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
+                audioBlob = await new Promise(resolve => {
+                    try { ysFixWebmDuration(audioBlob, recordDuration, resolve); } catch(e) { resolve(audioBlob); }
+                });
+            }
             
             const reader = new FileReader();
             reader.readAsDataURL(audioBlob);
@@ -10824,12 +10690,10 @@ try {
         // 將音訊 Blob 存入使用者指定的本地資料夾
         async function saveAudioToLocalDir(filename, audioBlob) {
             // ── Android Capacitor 模式 ──────────────────────────────────
-            // 直接寫入 Capacitor DOCUMENTS 目錄（此為 v52 驗證可行的路徑）
-            // Capacitor 的 'DOCUMENTS' 在此設備對應到 Documents/NOVA_Recordings/，
-            // 可透過手機檔案管理員直接看到。
             if (appState.recSettings.localDirHandle === '__android__') {
                 try {
                     const { Filesystem } = Capacitor.Plugins;
+                    const Directory = { Documents: 'DOCUMENTS', External: 'EXTERNAL' };
                     const base64 = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onload = () => resolve(reader.result.split(',')[1]);
@@ -10839,7 +10703,7 @@ try {
                     await Filesystem.writeFile({
                         path: `NOVA_Recordings/${filename}`,
                         data: base64,
-                        directory: 'DOCUMENTS',
+                        directory: Directory.Documents,
                         recursive: true
                     });
                     return true;
@@ -10883,55 +10747,6 @@ try {
             appState.splitTimerId = null;
         }
 
-        // ══════════════════════════════════════════════════════════════
-        // 週期性 chunk flush（核心 OOM 防護）
-        // 每 FLUSH_INTERVAL_MS 將 audioChunks 寫入 IndexedDB 並清空，
-        // 避免長時錄音將大量 Blob 物件累積在 JS heap 造成 Android WebView 被系統 kill。
-        // ══════════════════════════════════════════════════════════════
-        const _FLUSH_INTERVAL_MS = 3 * 60 * 1000; // 每 3 分鐘 flush 一次
-
-        function _startChunkFlush(mimeType) {
-            _stopChunkFlush();
-            _flushedSegIds = [];
-            _chunkFlushTimer = setInterval(async () => {
-                if (audioChunks.length === 0) return;
-                if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
-                const toFlush = [...audioChunks];
-                audioChunks = []; // 立即釋放 JS heap
-                const flushId = `_sf_${Date.now()}`;
-                try {
-                    const blob = new Blob(toFlush, { type: mimeType });
-                    await saveAudioBlob(flushId, blob);
-                    _flushedSegIds.push(flushId);
-                } catch(e) {
-                    // 若 IndexedDB 寫入失敗，回滾 chunks（避免資料遺失）
-                    audioChunks = [...toFlush, ...audioChunks];
-                }
-            }, _FLUSH_INTERVAL_MS);
-        }
-
-        function _stopChunkFlush() {
-            if (_chunkFlushTimer) { clearInterval(_chunkFlushTimer); _chunkFlushTimer = null; }
-        }
-
-        // 組合 flush 到 IndexedDB 的分段 blob + 剩餘 in-memory chunks，返回完整 Blob
-        async function _buildFinalBlob(remainingChunks, flushedIds, mimeType) {
-            if (!flushedIds || flushedIds.length === 0) {
-                return new Blob(remainingChunks, { type: mimeType });
-            }
-            // ★ OOM修正：每讀取一個 flushed 分段後讓主執行緒喘息 30ms，給 GC 機會回收
-            //   上一次 loadAudioBlob() 返回的 Blob 在 push 後可讓前一個 IndexedDB 讀取物件被回收
-            const parts = [];
-            for (const fid of flushedIds) {
-                const b = await loadAudioBlob(fid);
-                if (b) parts.push(b);
-                try { deleteAudioBlob(fid); } catch(e) {} // 清理暫存
-                await new Promise(r => setTimeout(r, 100)); // ★ GC breathing room（分切段增加至 100ms，讓大型 Blob 的底層 ArrayBuffer 有時間被回收）
-            }
-            if (remainingChunks.length > 0) parts.push(new Blob(remainingChunks, { type: mimeType }));
-            return new Blob(parts, { type: mimeType });
-        }
-
         async function doAutoSplit() {
             if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
             appState.isAutoSplitting = true;
@@ -10972,11 +10787,6 @@ try {
                 const micStream = appState._meetingMicStream;
                 const sysStream = appState._meetingSysStream;
                 let mixedStream;
-                // ★ 修正 AudioContext 洩漏：先關閉上一段的 AudioContext 再建新的
-                if (appState.recordingAudioCtx && appState.recordingAudioCtx.state !== 'closed') {
-                    try { appState.recordingAudioCtx.close(); } catch(e) {}
-                    appState.recordingAudioCtx = null;
-                }
                 if (sysStream && sysStream.getAudioTracks().some(t => t.readyState === 'live')) {
                     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
                     const audioCtx = new AudioContextClass();
@@ -10995,19 +10805,11 @@ try {
                 else if (MediaRecorder.isTypeSupported('audio/mp4')) actualMimeType = 'audio/mp4';
                 audioChunks = [];
                 mediaRecorder = new MediaRecorder(mixedStream, { mimeType: actualMimeType });
-                const _segId1 = Date.now();
-                _initOpfsStream(_segId1); // async — OPFS 開啟後 ondataavailable 才會寫入
-                mediaRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) {
-                        audioChunks.push(e.data); // 保留 in-memory 備份供即時辨識
-                        if (_opfsWritable) _opfsWritable.write(e.data).catch(() => {}); // 串流寫磁碟
-                    }
-                };
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
                 mediaRecorder.onstop = uploadAudioRecording;
                 appState.recordingStartTime = Date.now();
                 appState.isAutoSplitting = false;
                 mediaRecorder.start(1000);
-                _startChunkFlush(actualMimeType); // 保留 flush 作為 OPFS 不可用時的退回方案
                 scheduleAutoSplit();
                 document.getElementById('recording-status').classList.remove('hidden');
                 document.getElementById('recording-status').classList.add('flex');
@@ -11070,20 +10872,12 @@ try {
                 
                 mediaRecorder = new MediaRecorder(mixedStream, { mimeType: actualMimeType });
                 audioChunks = [];
-                const _segId3 = Date.now();
-                _initOpfsStream(_segId3);
-                mediaRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) {
-                        audioChunks.push(e.data);
-                        if (_opfsWritable) _opfsWritable.write(e.data).catch(() => {});
-                    }
-                };
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
                 mediaRecorder.onstop = uploadAudioRecording; 
                 appState.recordingStartTime = Date.now();
                 appState.recGroupId = null;
                 appState.isAutoSplitting = false;
                 mediaRecorder.start(1000);
-                _startChunkFlush(actualMimeType);
                 scheduleAutoSplit();
                 
                 document.getElementById('recording-status').classList.remove('hidden'); 
@@ -11108,20 +10902,13 @@ try {
 
                 mediaRecorder = new MediaRecorder(stream); audioChunks = []; appState.currentAudioTranscript = ""; 
                 
-                const _segId4 = Date.now();
-                _initOpfsStream(_segId4);
-                mediaRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) {
-                        audioChunks.push(e.data);
-                        if (_opfsWritable) _opfsWritable.write(e.data).catch(() => {});
-                    }
-                };
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
                 mediaRecorder.onstop = uploadAudioRecording; 
                 appState.recordingStartTime = Date.now();
+                // 首次啟動時初始化 groupId（續接段使用已有的 groupId）
                 if (!appState.isAutoSplitting) appState.recGroupId = null;
                 appState.isAutoSplitting = false;
                 mediaRecorder.start(1000);
-                _startChunkFlush(mediaRecorder.mimeType || 'audio/webm');
                 scheduleAutoSplit();
                 
                 document.getElementById('recording-status').classList.remove('hidden'); document.getElementById('recording-status').classList.add('flex');
@@ -11147,7 +10934,6 @@ try {
             }
 
             cancelAutoSplit();         // 取消自動分切計時器
-            _stopChunkFlush();         // ★ 停止週期 flush，最後剩餘 chunks 留在 audioChunks 等 onstop 處理
             appState.isAutoSplitting = false; // 確保不會自動重啟
             // ⚠️ 注意：不在這裡清除 recGroupId，讓最後一段也能取得正確 groupId
             // recGroupId 會在 uploadAudioRecording 完成後於 appState.recGroupId = null 被清除
@@ -11180,52 +10966,35 @@ try {
             // ── 自動分切：立即啟動下一段，不等待本段處理 ──────────────────
             if (wasAutoSplitting) {
                 // 把 chunks 快取起來，馬上重置全域 audioChunks 讓新段能用
-                const savedChunks   = [...audioChunks];
-                const savedFlushIds = [..._flushedSegIds]; // ★ 捕獲本段的 flushed IDs
-                const savedMime     = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm';
-                const savedStart    = appState.recordingStartTime;
-                const savedCtx      = continuationCtx;
-                audioChunks     = [];
-                _flushedSegIds  = []; // ★ 重置供新段使用
-                _stopChunkFlush();    // ★ 停止舊段 flush 計時器
+                const savedChunks = [...audioChunks];
+                const savedMime   = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm';
+                const savedStart  = appState.recordingStartTime;
+                const savedCtx    = continuationCtx;
+                audioChunks = [];
 
-                // ★ 先在背景啟動舊段儲存，500ms 後才啟動新段
-                // 原因：同時觸發 processAndSaveAudioSegment（重建大型 Blob）
-                // 與 startAudioRecording（新 MediaRecorder 預分配緩衝區）
-                // 會在 JS heap 形成雙重峰值，加上 _buildFinalBlob 的 IndexedDB 讀取，
-                // 很容易觸發 Android OOM killer → APP 閃退。
-                // 500ms 延遲讓舊段 Blob 組裝有機會完成，GC 清理一波後新段再進場。
-                appState.isAutoSplitting = true;
-
-                // ★ OPFS：關閉舊段串流，捕獲 handle 傳給背景處理
-                await _closeOpfsStream();
-                const _splitOldHandle = _opfsFileHandle;  // 背景處理會用它讀取
-                _opfsFileHandle = null;                    // 重置供新段使用
-
-                // 背景處理舊段（最優先執行）
-                const _splitSavePromise = processAndSaveAudioSegment(
-                    savedChunks, savedFlushIds, savedMime, savedStart, savedCtx, true
-                );
-
-                // 延遲 500ms 再啟動新段，讓 _buildFinalBlob 的大型 Blob 組裝先跑完一輪 GC
-                await new Promise(r => setTimeout(r, 500));
-
+                // ★ 先啟動下一段（無延遲）
+                appState.isAutoSplitting = true; // 保持 flag 讓 startMeetingRecording 識別
                 if (isMeetingSplit) {
                     startMeetingRecording(continuationCtx);
                 } else {
+                    // 直接恢復原本的 context（'note' 或 'record'），不呼叫 startAudioRecordOnly()
+                    // 因為 startAudioRecordOnly() 會強制把 context 改成 'record'
                     appState.recordingContext = continuationCtx;
                     appState.currentAudioTranscript = "";
                     startAudioRecording();
                 }
+
+                // 背景處理舊段（不阻塞新段錄音）
+                (async () => {
+                    await processAndSaveAudioSegment(savedChunks, savedMime, savedStart, savedCtx, true);
+                })();
                 return;
             }
 
             // ── 正常停止：同步處理 ──────────────────────────────────────────
-            const chunks        = [...audioChunks];
-            const finalFlushIds = [..._flushedSegIds]; // ★ 捕獲 flushed IDs
-            audioChunks    = [];
-            _flushedSegIds = [];
-            await processAndSaveAudioSegment(chunks, finalFlushIds,
+            const chunks = [...audioChunks];
+            audioChunks = [];
+            await processAndSaveAudioSegment(chunks,
                 (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'audio/webm',
                 appState.recordingStartTime, continuationCtx, false);
 
@@ -11235,37 +11004,15 @@ try {
         }
 
         // 實際的音訊儲存處理（可在背景執行）
-        async function processAndSaveAudioSegment(chunksArr, flushedIds, actualMimeType, startTime, ctx, isSegment) {
-            // ★ 設定防護旗標：告知 WAL 系統「音訊儲存中，請勿觸發 snapshot」
-            _novaRecordingSaving = true;
+        async function processAndSaveAudioSegment(chunksArr, actualMimeType, startTime, ctx, isSegment) {
             let recordDuration = Date.now() - (startTime || Date.now());
+            let audioBlob = new Blob(chunksArr, { type: actualMimeType });
 
-            // ══ OPFS 串流路徑（優先）vs IndexedDB flush 路徑（退回）══
-            //   若本段已有 OPFS 串流（_opfsFileHandle 非 null），則：
-            //   ① 分塊串流寫入 Documents（peak < 10MB）
-            //   ② File 物件直接存 IndexedDB（不做 ArrayBuffer 轉換）
-            //   否則退回舊的 _buildFinalBlob + FileReader 路徑。
-            const _useOpfs = !!_opfsFileHandle;
-            const _savedOpfsHandle = _opfsFileHandle;   // 取快照，避免被 _cleanupOpfs 清掉
-
-            let audioBlob;
-            if (_useOpfs) {
-                await _closeOpfsStream();   // 確保 writable 已關閉（onstop 之後應已關）
-                audioBlob = null;           // OPFS 路徑暫不組裝 blob，稍後按需讀取
-            } else {
-                // IndexedDB flush 退回路徑
-                audioBlob = await _buildFinalBlob(chunksArr, flushedIds, actualMimeType);
+            if (actualMimeType.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
+                audioBlob = await new Promise(resolve => {
+                    try { ysFixWebmDuration(audioBlob, recordDuration, resolve); } catch(e) { resolve(audioBlob); }
+                });
             }
-
-            // ★ OOM修正：完全跳過 ysFixWebmDuration（對所有錄音段）
-            //   ysFixWebmDuration 會把整個音訊讀入 ArrayBuffer 做完整複本：
-            //   60 分鐘 ≈ 57MB Blob → 暫時持有 57+57=114MB，直接導致 Android OOM killer 殺掉 App。
-            //   WebM 沒有正確時長元資料在 Chrome/VLC/Android 播放器都可正常播放，
-            //   只有部分播放器的進度條拖曳會失效，但核心音訊內容完整。
-            //   → 此行為在 processAndSaveAudioSegment 中永久跳過。
-
-            // ★ 強制讓主執行緒喘息一下，GC 有機會在 IndexedDB 寫入前回收記憶體
-            await new Promise(r => setTimeout(r, 50));
 
             const dateObj = new Date();
             const month   = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -11281,29 +11028,12 @@ try {
             const groupId = appState.recGroupId || recordId;
             if (!appState.recGroupId) appState.recGroupId = groupId;
 
-            if (_useOpfs) {
-                // ── OPFS 路徑：串流寫磁碟 → 再存 IndexedDB ──────────────────
-                // 先串流寫入 Documents（peak < 10MB），完成後才讀取整個 File 物件存 IndexedDB
-                const localDirSet = !!appState.recSettings.localDirHandle;
-                if (localDirSet && appState.recSettings.localDirHandle === '__android__') {
-                    addMessage(`⬇️ 正在串流寫入 Documents/NOVA_Recordings/${filename}（分段讀取，記憶體佔用 < 10MB）…`, 'system');
-                    const streamOk = await _streamOpfsToDocuments(_savedOpfsHandle, filename);
-                    if (streamOk) addMessage(`✅ 已串流存入 Documents/NOVA_Recordings/${filename}`, 'system');
-                    else addMessage(`⚠️ 串流寫入失敗，嘗試退回 IndexedDB`, 'system');
-                }
-                // 存 IndexedDB（File 直接存，不做 ArrayBuffer 轉換）
-                await _saveOpfsToIndexedDB(_savedOpfsHandle, recordId);
-                await _cleanupOpfs();
-                await new Promise(r => setTimeout(r, 100));
-            } else {
-                // ── IndexedDB flush 退回路徑 ─────────────────────────────────
-                await saveAudioBlob(recordId, audioBlob);
-                audioBlob = null;
-                await new Promise(r => setTimeout(r, 100));
-                if (appState.recSettings.localDirHandle) {
-                    const saved = await saveAudioToLocalDir(filename, audioBlob);
-                    if (saved) addMessage(`📁 已存入本地資料夾「${appState.recSettings.localSaveDirName}」：${filename}`, 'system');
-                }
+            await saveAudioBlob(recordId, audioBlob);
+
+            // 存入本地資料夾（直接存 weba，不轉 MP3）
+            if (appState.recSettings.localDirHandle) {
+                const saved = await saveAudioToLocalDir(filename, audioBlob);
+                if (saved) addMessage(`📁 已存入本地資料夾「${appState.recSettings.localSaveDirName}」：${filename}`, 'system');
             }
 
             const capturedTranscript = appState.currentAudioTranscript ? appState.currentAudioTranscript.trim() : "";
@@ -11325,7 +11055,7 @@ try {
                 addMessage(`📝 語音筆記已安全儲存至「筆記/文件」分頁${segMsg}。`, 'system'); renderNotes();
                 // ── 自動上傳 Google Drive（筆記/文件頁分段錄音）
                 if (appState.recSettings.autoUploadNotes && appState.driveUrl) {
-                    setTimeout(() => uploadNoteAudioToDrive(newNote.id), 30000); // ★ OOM修正：延長至30秒，讓 GC 充分回收音訊記憶體後再做 base64 編碼
+                    setTimeout(() => uploadNoteAudioToDrive(newNote.id), 1500);
                 }
             } else {
                 const segIndex = appState.audioRecords.filter(r => r.groupId === groupId).length + 1;
@@ -11347,15 +11077,8 @@ try {
                 addMessage(`📼 錄音已安全儲存至本地「錄音紀錄」分頁${segMsg}。`, 'system'); renderAudioRecords();
                 // ── 自動上傳 Google Drive
                 if (appState.recSettings.autoUploadAudio && appState.driveUrl) {
-                    setTimeout(() => manualUploadToDrive(String(newRecord.id)), 30000); // ★ OOM修正：延長至30秒，讓 GC 充分回收音訊記憶體後再做 base64 編碼
+                    setTimeout(() => manualUploadToDrive(String(newRecord.id)), 1500);
                 }
-            }
-            // ★ 釋放防護旗標，允許 WAL snapshot 再次觸發
-            _novaRecordingSaving = false;
-            // ★ 如果儲存期間有 snapshot 被延後，現在補觸發（延遲 2 秒讓 GC 有時間回收記憶體）
-            if (_novaWalSnapshotDeferred) {
-                _novaWalSnapshotDeferred = false;
-                setTimeout(() => { if (typeof window._novaWalSnapshot === 'function') window._novaWalSnapshot(); }, 15000); // ★ OOM修正：延長至15秒，避免與音訊 base64 編碼/Drive上傳在記憶體峰值期撞車
             }
         }
 
