@@ -8754,40 +8754,21 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         //   不使用 <a download>（Capacitor WebView 對大 Blob URL 的下載行為不可靠）
                         //   不使用 Directory.Documents（Android 11+ 的 DOCUMENTS 常數對應 App 私有目錄）
                         try {
-                            // 轉 base64（分段避免 call stack overflow）
-                            const ab2 = await audioBlob.arrayBuffer();
-                            const bytes2 = new Uint8Array(ab2);
-                            let binary2 = '';
-                            const chunk2 = 8192;
-                            for (let j = 0; j < bytes2.length; j += chunk2) {
-                                binary2 += String.fromCharCode(...bytes2.subarray(j, j + chunk2));
-                            }
-                            const b64weba = btoa(binary2);
-
-                            // 寫入 CACHE（App 一定有權限）
-                            const cacheRes = await CapFS.writeFile({
+                            // FileReader 串流式 base64 編碼（比 btoa+ArrayBuffer 更省記憶體）
+                            const b64weba = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => resolve(reader.result.split(',')[1]);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(audioBlob);
+                            });
+                            // 直接寫入 DOCUMENTS/NOVA_Recordings/（v52 驗證可行，檔案管理員可見）
+                            await CapFS.writeFile({
                                 path: `NOVA_Recordings/${filename}`,
                                 data: b64weba,
-                                directory: 'CACHE',
+                                directory: 'DOCUMENTS',
                                 recursive: true
                             });
-                            const cacheUri = cacheRes.uri;
-
-                            // 透過 Share 讓使用者決定存到哪（Files App / 傳給其他 App）
-                            if (CapShare) {
-                                try {
-                                    await CapShare.share({ title: filename, files: [cacheUri], dialogTitle: '儲存錄音檔案' });
-                                    showToast(`✅ 第 ${i+1}/${totalSegs} 段：請在分享視窗選擇儲存位置`);
-                                } catch(shareErr) {
-                                    if (shareErr?.message && /cancel/i.test(shareErr.message)) {
-                                        showToast(`⚠️ 已取消，第 ${i+1} 段暫存於 App 快取`);
-                                    } else {
-                                        showToast(`✅ 第 ${i+1} 段已存入 App 快取：${filename}`);
-                                    }
-                                }
-                            } else {
-                                showToast(`✅ 第 ${i+1} 段已存入 App 快取（Share 外掛未載入）：${filename}`);
-                            }
+                            showToast(`✅ 第 ${i+1}/${totalSegs} 段已存入 Documents/NOVA_Recordings/${filename}`);
                         } catch(webaErr) {
                             showToast(`❌ 第 ${i+1} 段儲存失敗：${webaErr.message}`);
                         }
@@ -10729,44 +10710,24 @@ try {
         // 將音訊 Blob 存入使用者指定的本地資料夾
         async function saveAudioToLocalDir(filename, audioBlob) {
             // ── Android Capacitor 模式 ──────────────────────────────────
-            // ★ 已知問題：Capacitor Filesystem 的 'DOCUMENTS' 常數在 Android 11+
-            //   對應的是 App 私有目錄（/data/user/0/<pkg>/files/），
-            //   不是使用者看得到的公開 Documents 資料夾。
-            //   改用 CACHE + Share plugin 讓使用者選擇存到哪裡（同 batchDownloadWeba 策略）。
+            // 直接寫入 Capacitor DOCUMENTS 目錄（此為 v52 驗證可行的路徑）
+            // Capacitor 的 'DOCUMENTS' 在此設備對應到 Documents/NOVA_Recordings/，
+            // 可透過手機檔案管理員直接看到。
             if (appState.recSettings.localDirHandle === '__android__') {
-                const CapShare = window.Capacitor?.Plugins?.Share;
                 try {
                     const { Filesystem } = Capacitor.Plugins;
-                    // 分段 base64 編碼（避免大型錄音 btoa call stack overflow）
-                    const ab = await audioBlob.arrayBuffer();
-                    const bytes = new Uint8Array(ab);
-                    let binary = '';
-                    const chunkSz = 8192;
-                    for (let i = 0; i < bytes.length; i += chunkSz) {
-                        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSz));
-                    }
-                    const base64 = btoa(binary);
-
-                    // 先寫 CACHE（一定有權限）
-                    const cacheRes = await Filesystem.writeFile({
+                    const base64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result.split(',')[1]);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(audioBlob);
+                    });
+                    await Filesystem.writeFile({
                         path: `NOVA_Recordings/${filename}`,
                         data: base64,
-                        directory: 'CACHE',
+                        directory: 'DOCUMENTS',
                         recursive: true
                     });
-                    const cacheUri = cacheRes.uri;
-                    console.log('[saveAudioToLocalDir] 已寫入 CACHE:', cacheUri);
-
-                    // 透過 Share 讓使用者選擇儲存位置（公開 Documents / 其他 App）
-                    if (CapShare) {
-                        try {
-                            await CapShare.share({ title: filename, files: [cacheUri], dialogTitle: '儲存錄音至手機' });
-                        } catch(shareErr) {
-                            if (!shareErr?.message?.match(/cancel/i)) {
-                                console.warn('Share 失敗，但檔案已存入 CACHE:', shareErr);
-                            }
-                        }
-                    }
                     return true;
                 } catch(e) {
                     console.warn('Android saveAudioToLocalDir 失敗:', e);
