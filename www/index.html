@@ -8716,6 +8716,10 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
             window.batchDownloadWeba = async function(groupIds, type) {
                 const ids = Array.isArray(groupIds) ? groupIds : [groupIds];
                 const totalSegs = ids.length;
+                const CapFS = window.Capacitor?.Plugins?.Filesystem;
+                const CapShare = window.Capacitor?.Plugins?.Share;
+                const isAndroid = !!(window.Capacitor && window.Capacitor.getPlatform() === 'android');
+
                 for (let i = 0; i < ids.length; i++) {
                     const id = ids[i];
                     const record = type === 'record'
@@ -8738,18 +8742,69 @@ const mimeStr = base64URI.slice(5, splitIndex).split(';')[0];
                         } catch(e) { showToast(`⚠️ 壓縮失敗，以原格式下載`); }
                     }
 
-                    showToast(`⬇️ 下載第 ${i+1}/${totalSegs} 段 weba…`);
                     const ext = '.weba';
-                    // Bug2 fix: 加上段落編號
                     const baseTitle = (record.title || `NOVA_Audio_${id}`).replace(/[\\/:*?"<>|]/g, '_');
                     const segSuffix = totalSegs > 1 ? `_第${i+1}段` : '';
-                    const url = URL.createObjectURL(audioBlob);
-                    const a = document.createElement('a'); a.href = url; a.download = baseTitle + segSuffix + ext; a.style.display = 'none';
-                    document.body.appendChild(a); a.click();
-                    await new Promise(r => setTimeout(r, 700));
-                    document.body.removeChild(a); URL.revokeObjectURL(url);
+                    const filename = baseTitle + segSuffix + ext;
+
+                    showToast(`⬇️ 儲存第 ${i+1}/${totalSegs} 段：${filename}…`);
+
+                    if (isAndroid && CapFS) {
+                        // ★ Android：用 Capacitor Filesystem 寫入 CACHE，再透過 Share 讓使用者選目的地
+                        //   不使用 <a download>（Capacitor WebView 對大 Blob URL 的下載行為不可靠）
+                        //   不使用 Directory.Documents（Android 11+ 的 DOCUMENTS 常數對應 App 私有目錄）
+                        try {
+                            // 轉 base64（分段避免 call stack overflow）
+                            const ab2 = await audioBlob.arrayBuffer();
+                            const bytes2 = new Uint8Array(ab2);
+                            let binary2 = '';
+                            const chunk2 = 8192;
+                            for (let j = 0; j < bytes2.length; j += chunk2) {
+                                binary2 += String.fromCharCode(...bytes2.subarray(j, j + chunk2));
+                            }
+                            const b64weba = btoa(binary2);
+
+                            // 寫入 CACHE（App 一定有權限）
+                            const cacheRes = await CapFS.writeFile({
+                                path: `NOVA_Recordings/${filename}`,
+                                data: b64weba,
+                                directory: 'CACHE',
+                                recursive: true
+                            });
+                            const cacheUri = cacheRes.uri;
+
+                            // 透過 Share 讓使用者決定存到哪（Files App / 傳給其他 App）
+                            if (CapShare) {
+                                try {
+                                    await CapShare.share({ title: filename, files: [cacheUri], dialogTitle: '儲存錄音檔案' });
+                                    showToast(`✅ 第 ${i+1}/${totalSegs} 段：請在分享視窗選擇儲存位置`);
+                                } catch(shareErr) {
+                                    if (shareErr?.message && /cancel/i.test(shareErr.message)) {
+                                        showToast(`⚠️ 已取消，第 ${i+1} 段暫存於 App 快取`);
+                                    } else {
+                                        showToast(`✅ 第 ${i+1} 段已存入 App 快取：${filename}`);
+                                    }
+                                }
+                            } else {
+                                showToast(`✅ 第 ${i+1} 段已存入 App 快取（Share 外掛未載入）：${filename}`);
+                            }
+                        } catch(webaErr) {
+                            showToast(`❌ 第 ${i+1} 段儲存失敗：${webaErr.message}`);
+                        }
+                    } else {
+                        // 瀏覽器模式：使用 <a download>
+                        const url = URL.createObjectURL(audioBlob);
+                        const a = document.createElement('a'); a.href = url; a.download = filename; a.style.display = 'none';
+                        document.body.appendChild(a); a.click();
+                        await new Promise(r => setTimeout(r, 700));
+                        document.body.removeChild(a); URL.revokeObjectURL(url);
+                    }
+
+                    // 讓 GC 在段與段之間清理 audioBlob
+                    audioBlob = null;
+                    await new Promise(r => setTimeout(r, 300));
                 }
-                showToast(`✅ 全部 ${totalSegs} 段 weba 下載完成！`);
+                showToast(`✅ 全部 ${totalSegs} 段處理完成！`);
             };
 
             // ── 批次下載（多段群組）MP3 ─────────────────────────────────
@@ -10412,12 +10467,8 @@ document.getElementById('translate-settings').classList.add('hidden');
             audioChunks = []; 
             let audioBlob = new Blob(chunksToProcess, { type: mediaRecorder?.mimeType || 'audio/webm' });
 
-            // 修復 WebM duration
-            if (audioBlob.type.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
-                audioBlob = await new Promise(resolve => {
-                    try { ysFixWebmDuration(audioBlob, recordDuration, resolve); } catch(e) { resolve(audioBlob); }
-                });
-            }
+            // ★ OOM修正：跳過 ysFixWebmDuration（見 processAndSaveAudioSegment 同樣的說明）
+            // ysFixWebmDuration 需要把整個 Blob 讀成 ArrayBuffer，大型錄音會導致記憶體倍增崩潰。
             
             const reader = new FileReader();
             reader.readAsDataURL(audioBlob);
@@ -10678,22 +10729,44 @@ try {
         // 將音訊 Blob 存入使用者指定的本地資料夾
         async function saveAudioToLocalDir(filename, audioBlob) {
             // ── Android Capacitor 模式 ──────────────────────────────────
+            // ★ 已知問題：Capacitor Filesystem 的 'DOCUMENTS' 常數在 Android 11+
+            //   對應的是 App 私有目錄（/data/user/0/<pkg>/files/），
+            //   不是使用者看得到的公開 Documents 資料夾。
+            //   改用 CACHE + Share plugin 讓使用者選擇存到哪裡（同 batchDownloadWeba 策略）。
             if (appState.recSettings.localDirHandle === '__android__') {
+                const CapShare = window.Capacitor?.Plugins?.Share;
                 try {
                     const { Filesystem } = Capacitor.Plugins;
-                    const Directory = { Documents: 'DOCUMENTS', External: 'EXTERNAL' };
-                    const base64 = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result.split(',')[1]);
-                        reader.onerror = reject;
-                        reader.readAsDataURL(audioBlob);
-                    });
-                    await Filesystem.writeFile({
+                    // 分段 base64 編碼（避免大型錄音 btoa call stack overflow）
+                    const ab = await audioBlob.arrayBuffer();
+                    const bytes = new Uint8Array(ab);
+                    let binary = '';
+                    const chunkSz = 8192;
+                    for (let i = 0; i < bytes.length; i += chunkSz) {
+                        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSz));
+                    }
+                    const base64 = btoa(binary);
+
+                    // 先寫 CACHE（一定有權限）
+                    const cacheRes = await Filesystem.writeFile({
                         path: `NOVA_Recordings/${filename}`,
                         data: base64,
-                        directory: Directory.Documents,
+                        directory: 'CACHE',
                         recursive: true
                     });
+                    const cacheUri = cacheRes.uri;
+                    console.log('[saveAudioToLocalDir] 已寫入 CACHE:', cacheUri);
+
+                    // 透過 Share 讓使用者選擇儲存位置（公開 Documents / 其他 App）
+                    if (CapShare) {
+                        try {
+                            await CapShare.share({ title: filename, files: [cacheUri], dialogTitle: '儲存錄音至手機' });
+                        } catch(shareErr) {
+                            if (!shareErr?.message?.match(/cancel/i)) {
+                                console.warn('Share 失敗，但檔案已存入 CACHE:', shareErr);
+                            }
+                        }
+                    }
                     return true;
                 } catch(e) {
                     console.warn('Android saveAudioToLocalDir 失敗:', e);
@@ -11070,22 +11143,12 @@ try {
             // ★ 組合 flushed 分段 blob + 剩餘 in-memory chunks（核心 OOM 修正）
             let audioBlob = await _buildFinalBlob(chunksArr, flushedIds, actualMimeType);
 
-            // ★ OOM修正：ysFixWebmDuration 會把整個音訊讀入 ArrayBuffer（完整複本），
-            //   對 60 分鐘錄音 ≈ 57MB → 暫時持有 57+57=114MB。
-            //   自動分切段（isSegment=true）的時長本來就只是估算值，跳過此步驟可省掉最大的記憶體峰值。
-            //   手動停止（isSegment=false）才有必要修正時長元資料（使用者可能會播放進度條）。
-            if (!isSegment && actualMimeType.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
-                const originalBlob = audioBlob;
-                try {
-                    audioBlob = await new Promise((resolve, reject) => {
-                        try { ysFixWebmDuration(originalBlob, recordDuration, resolve); }
-                        catch(e) { resolve(originalBlob); }
-                    });
-                } catch(e) {
-                    audioBlob = originalBlob; // fallback
-                }
-                // originalBlob 引用在此 block 結束後可被 GC 回收
-            }
+            // ★ OOM修正：完全跳過 ysFixWebmDuration（對所有錄音段）
+            //   ysFixWebmDuration 會把整個音訊讀入 ArrayBuffer 做完整複本：
+            //   60 分鐘 ≈ 57MB Blob → 暫時持有 57+57=114MB，直接導致 Android OOM killer 殺掉 App。
+            //   WebM 沒有正確時長元資料在 Chrome/VLC/Android 播放器都可正常播放，
+            //   只有部分播放器的進度條拖曳會失效，但核心音訊內容完整。
+            //   → 此行為在 processAndSaveAudioSegment 中永久跳過。
 
             // ★ 強制讓主執行緒喘息一下，GC 有機會在 IndexedDB 寫入前回收記憶體
             await new Promise(r => setTimeout(r, 50));
