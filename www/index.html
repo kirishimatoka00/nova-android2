@@ -10778,7 +10778,7 @@ try {
                 const b = await loadAudioBlob(fid);
                 if (b) parts.push(b);
                 try { deleteAudioBlob(fid); } catch(e) {} // 清理暫存
-                await new Promise(r => setTimeout(r, 30)); // ★ GC breathing room
+                await new Promise(r => setTimeout(r, 100)); // ★ GC breathing room（分切段增加至 100ms，讓大型 Blob 的底層 ArrayBuffer 有時間被回收）
             }
             if (remainingChunks.length > 0) parts.push(new Blob(remainingChunks, { type: mimeType }));
             return new Blob(parts, { type: mimeType });
@@ -11021,8 +11021,22 @@ try {
                 _flushedSegIds  = []; // ★ 重置供新段使用
                 _stopChunkFlush();    // ★ 停止舊段 flush 計時器
 
-                // ★ 先啟動下一段（無延遲，_startChunkFlush 會在 start 函數內重新啟動）
-                appState.isAutoSplitting = true; // 保持 flag 讓 startMeetingRecording 識別
+                // ★ 先在背景啟動舊段儲存，500ms 後才啟動新段
+                // 原因：同時觸發 processAndSaveAudioSegment（重建大型 Blob）
+                // 與 startAudioRecording（新 MediaRecorder 預分配緩衝區）
+                // 會在 JS heap 形成雙重峰值，加上 _buildFinalBlob 的 IndexedDB 讀取，
+                // 很容易觸發 Android OOM killer → APP 閃退。
+                // 500ms 延遲讓舊段 Blob 組裝有機會完成，GC 清理一波後新段再進場。
+                appState.isAutoSplitting = true;
+
+                // 背景處理舊段（最優先執行）
+                const _splitSavePromise = processAndSaveAudioSegment(
+                    savedChunks, savedFlushIds, savedMime, savedStart, savedCtx, true
+                );
+
+                // 延遲 500ms 再啟動新段，讓 _buildFinalBlob 的大型 Blob 組裝先跑完一輪 GC
+                await new Promise(r => setTimeout(r, 500));
+
                 if (isMeetingSplit) {
                     startMeetingRecording(continuationCtx);
                 } else {
@@ -11030,11 +11044,6 @@ try {
                     appState.currentAudioTranscript = "";
                     startAudioRecording();
                 }
-
-                // 背景處理舊段（不阻塞新段錄音）
-                (async () => {
-                    await processAndSaveAudioSegment(savedChunks, savedFlushIds, savedMime, savedStart, savedCtx, true);
-                })();
                 return;
             }
 
@@ -11055,20 +11064,27 @@ try {
         // 實際的音訊儲存處理（可在背景執行）
         async function processAndSaveAudioSegment(chunksArr, flushedIds, actualMimeType, startTime, ctx, isSegment) {
             // ★ 設定防護旗標：告知 WAL 系統「音訊儲存中，請勿觸發 snapshot」
+            // 對自動分切段（isSegment=true）同樣生效，確保整個背景儲存期間不會觸發 WAL 備份
             _novaRecordingSaving = true;
             let recordDuration = Date.now() - (startTime || Date.now());
             // ★ 組合 flushed 分段 blob + 剩餘 in-memory chunks（核心 OOM 修正）
             let audioBlob = await _buildFinalBlob(chunksArr, flushedIds, actualMimeType);
 
-            if (actualMimeType.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
+            // ★ OOM修正：ysFixWebmDuration 會把整個音訊讀入 ArrayBuffer（完整複本），
+            //   對 60 分鐘錄音 ≈ 57MB → 暫時持有 57+57=114MB。
+            //   自動分切段（isSegment=true）的時長本來就只是估算值，跳過此步驟可省掉最大的記憶體峰值。
+            //   手動停止（isSegment=false）才有必要修正時長元資料（使用者可能會播放進度條）。
+            if (!isSegment && actualMimeType.includes('webm') && typeof ysFixWebmDuration !== 'undefined') {
                 const originalBlob = audioBlob;
-                audioBlob = await new Promise(resolve => {
-                    try { ysFixWebmDuration(originalBlob, recordDuration, resolve); } catch(e) { resolve(originalBlob); }
-                });
-                // ★ 明確釋放原始 Blob 引用，讓 GC 盡快回收（ysFixWebmDuration 內部有 ArrayBuffer 副本，原 Blob 不再需要）
-                if (audioBlob !== originalBlob) {
-                    // ★ OOM修正：明確解除 originalBlob 引用，觸發 GC 在 IndexedDB 寫入前回收大型 ArrayBuffer
+                try {
+                    audioBlob = await new Promise((resolve, reject) => {
+                        try { ysFixWebmDuration(originalBlob, recordDuration, resolve); }
+                        catch(e) { resolve(originalBlob); }
+                    });
+                } catch(e) {
+                    audioBlob = originalBlob; // fallback
                 }
+                // originalBlob 引用在此 block 結束後可被 GC 回收
             }
 
             // ★ 強制讓主執行緒喘息一下，GC 有機會在 IndexedDB 寫入前回收記憶體
@@ -11808,21 +11824,6 @@ try {
                 if (!audioBlob) { showToast('❌ 找不到音訊資料，請重新錄製'); cleanup(); return; }
 
                 const rawSizeMB = (audioBlob.size / 1024 / 1024).toFixed(1);
-                // ★ OOM修正：對大檔案做記憶體警告
-                //   base64 編碼後體積 +33%，再加 JSON 序列化又 +33%，
-                //   一支 40MB weba = 需要同時持有 ~107MB 字串 → 容易在低記憶體設備崩潰
-                if (parseFloat(rawSizeMB) > 30) {
-                    const proceed = await showConfirm(
-                        `⚠️ 此檔案大小 ${rawSizeMB} MB，上傳時需要在記憶體中同時持有原始音訊、base64 字串與 JSON 封包（合計約 ${(parseFloat(rawSizeMB) * 2.66).toFixed(0)} MB）。
-
-低記憶體設備可能在此步驟閃退。
-
-建議先「手動下載」後再自行上傳至 Google Drive。
-
-仍要在 App 內上傳嗎？`
-                    );
-                    if (!proceed) { cleanup(); return; }
-                }
                 showToast(`☁️ 準備上傳（${rawSizeMB} MB weba 原始格式），請稍候…`);
 
                 // 直接使用原始 weba 格式上傳，不轉 MP3
